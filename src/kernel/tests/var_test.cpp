@@ -56,6 +56,9 @@ void run_tests(int argc, char* argv[]) {
     assert(context.get());
     ostream& os = kenv->get_debug_output()->get_ostream();
     auto settings = context->get_actl_opts();
+    os << "Solution: " << ksoln->get_name();
+    os << "Precision: " << ksoln->get_element_bytes();
+    assert(ksoln->get_real_bytes() == 8);
 
     // Problem dimensions.
     auto dims = YASK_STENCIL_SOLUTION::new_dims();
@@ -138,13 +141,14 @@ void run_tests(int argc, char* argv[]) {
         Indices firsti(first), lasti(last);
 
         // Buffer for copying.
-        size_t sz = g3f->get_num_storage_bytes();
-        char* buf = new char[sz];
-        offload_map_alloc(buf, sz);
+        size_t nelem = g3f->get_num_storage_elements();
+        size_t bsz = nelem * sizeof(double);
+        double* buf = new double[nelem];
+        offload_map_alloc(buf, bsz);
 
         // Buffer with zeros.
-        char* buf0 = new char[sz];
-        memset(buf0, 0, sz);
+        double* buf0 = new double[nelem];
+        memset(buf0, 0, bsz);
                           
         bool done = false;
         for (int testn = 0; !done; testn++) {
@@ -174,9 +178,9 @@ void run_tests(int argc, char* argv[]) {
 
             case 1: {
                 os << " by slice on host...\n";
-                auto n = gb3->get_elements_in_slice(buf, firsti, lasti, false);
+                auto n = gb3->get_elements_in_slice(buf, nelem, firsti, lasti, false);
                 assert(n);
-                gb3f->set_elements_in_slice(buf, firsti, lasti, false);
+                gb3f->set_elements_in_slice(buf, nelem, firsti, lasti, false);
                 break;
             }
                 
@@ -185,14 +189,14 @@ void run_tests(int argc, char* argv[]) {
                 os << " by slice then copy to/from device...\n";
 
                 // Same as test 1.
-                gb3->get_elements_in_slice(buf, firsti, lasti, false);
-                gb3f->set_elements_in_slice(buf, firsti, lasti, false);
+                gb3->get_elements_in_slice(buf, nelem, firsti, lasti, false);
+                gb3f->set_elements_in_slice(buf, nelem, firsti, lasti, false);
 
                 // Copy data to device; invalidate host data; copy data back.
                 gb3f->copy_data_to_device();
 
                 #ifndef USE_OFFLOAD_USM
-                gb3f->set_elements_in_slice(buf0, firsti, lasti, false);
+                gb3f->set_elements_in_slice(buf0, nelem, firsti, lasti, false);
                 gb3f->get_coh()._force_state(Coherency::dev_mod);
                 #endif
 
@@ -207,20 +211,20 @@ void run_tests(int argc, char* argv[]) {
                 assert(VLEN_X * VLEN_Y * VLEN_Z == 1);
 
                 // Copy from var to buffer on host.
-                gb3->get_elements_in_slice(buf, firsti, lasti, false);
-                gb3f->set_elements_in_slice(buf, firsti, lasti, false);
-                gb3f->get_vecs_in_slice(buf, firsti, lasti, false);
+                gb3->get_elements_in_slice(buf, nelem, firsti, lasti, false);
+                gb3f->set_elements_in_slice(buf, nelem, firsti, lasti, false);
+                gb3f->get_vecs_in_slice(buf, nelem, firsti, lasti, false);
 
                 #ifndef USE_OFFLOAD_USM
-                gb3f->set_elements_in_slice(buf0, firsti, lasti, false);
+                gb3f->set_elements_in_slice(buf0, nelem, firsti, lasti, false);
                 gb3f->get_coh()._force_state(Coherency::dev_mod);
                 #endif
 
                 // Copy buffer to dev.
-                offload_copy_to_device(buf, sz);
+                offload_copy_to_device(buf, nelem);
 
                 // Copy from buffer to var on dev.
-                gb3f->set_vecs_in_slice(buf, firsti, lasti, true);
+                gb3f->set_vecs_in_slice(buf, nelem, firsti, lasti, true);
 
                 // Copy var back to host.
                 gb3f->copy_data_from_device();
@@ -265,7 +269,7 @@ void run_tests(int argc, char* argv[]) {
             }
         }
         delete[] buf;
-        offload_map_free(buf, sz);
+        offload_map_free(buf, bsz);
         os << "Exiting 3-D test\n";
     }
     kenv->finalize();

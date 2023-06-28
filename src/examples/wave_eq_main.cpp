@@ -218,7 +218,7 @@ int main(int argc, char** argv) {
                 double val = initial_elev(xi, yj, lx, ly);
                 bufs[0][j] = val;
             }
-            e->set_elements_in_slice(bufs[0], { 0, i, firsty }, { 0, i, lasty-1 });
+            e->set_elements_in_slice(bufs[0], ysz, { 0, i, firsty }, { 0, i, lasty-1 });
         }
 
         // Apply the stencil solution to the data.
@@ -239,9 +239,9 @@ int main(int argc, char** argv) {
             for (idx_t i = firstx; i <= lastx-1; i++) {
                 for (idx_t j = 0; j < ysz-1; j++)
                     bufs[1][j] = 99.;
-                auto n = e->get_elements_in_slice(bufs[0], { ti, i, firsty }, { ti, i, lasty });
+                auto n = e->get_elements_in_slice(bufs[0], ysz, { ti, i, firsty }, { ti, i, lasty });
                 assert(n == ysz);
-                n = u->get_elements_in_slice(bufs[1], { ti, i, firsty }, { ti, i, lasty });
+                n = u->get_elements_in_slice(bufs[1], ysz, { ti, i, firsty }, { ti, i, lasty });
                 assert(n == ysz);
 
                 #pragma omp simd
@@ -290,10 +290,10 @@ int main(int argc, char** argv) {
 
         // Compute error against exact solution
         double err_L2 = 0.0;
-        y->get_elements_in_slice(bufs[0], { firsty }, { lasty });
+        y->get_elements_in_slice(bufs[0], ysz, { firsty }, { lasty });
         for (idx_t i = firstx; i <= lastx-1; i++) {
             double xi = x->get_element({i});
-            e->get_elements_in_slice(bufs[1], { nt+1, i, firsty }, { nt+1, i, lasty });
+            e->get_elements_in_slice(bufs[1], ysz, { nt+1, i, firsty }, { nt+1, i, lasty });
             for (idx_t j = 0; j <= ysz-1; j++) {
                 double yi = bufs[0][j];
                 double elev_exact = exact_elev(xi, yi, t, lx, ly);

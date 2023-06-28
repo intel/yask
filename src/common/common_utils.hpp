@@ -68,6 +68,9 @@ inline void omp_unset_lock(omp_lock_t* p) { }
 
 namespace yask {
 
+    constexpr idx_t IDX_MAX = LONG_MAX;
+    constexpr idx_t IDX_MIN = LONG_MIN;
+
     // Controls whether make*Str() functions add
     // suffixes or just print full number for
     // machine parsing.

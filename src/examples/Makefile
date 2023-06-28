@@ -23,10 +23,6 @@
 
 # Makefile for the YASK example applications.
 
-default: wave_eq swe
-
-wave_eq:
+default:
 	$(MAKE) -f wave_eq.mk
-
-swe:
 	$(MAKE) -f swe.mk

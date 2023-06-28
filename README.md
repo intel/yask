@@ -65,6 +65,8 @@ and Intel(R) graphics processors.
 
 ## Backward-compatibility notices
 ### Version 4
+* Version 4.04.00 deprecates the existing `void*` set/get_elements_in_slice()
+    APIs and provides safer `float*` and `double*` versions.
 * Version 4.03.00 is a significant release with the following notices:
   - Each non-scratch stencil equation is now checked to ensure
     offsets of +/-1 from the step-dimension on the LHS, e.g.,

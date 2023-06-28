@@ -179,8 +179,10 @@ if __name__ == "__main__":
     # Determine the datatype.
     if soln.get_element_bytes() == 4 :
         dtype = np.float32
+        ctype = ct.c_float
     else :
         dtype = np.float64
+        ctype = ct.c_double
         
     # Init global settings.
     soln_dims = soln.get_domain_dim_names()

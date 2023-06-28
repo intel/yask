@@ -170,7 +170,7 @@ int main(int argc, char** argv) {
         // YASK domains.
         auto firstx = soln->get_first_rank_domain_index("x");
         auto lastx = soln->get_last_rank_domain_index("x");
-        auto xsz = lastx - firstx + 1; // number of cells in YASK domain.
+        //auto xsz = lastx - firstx + 1; // number of cells in YASK domain.
         auto firsty = soln->get_first_rank_domain_index("y");
         auto lasty = soln->get_last_rank_domain_index("y");
         auto ysz = lasty - firsty + 1; // number of cells in YASK domain.
@@ -220,8 +220,8 @@ int main(int argc, char** argv) {
                 bufs[1][j] = bath; // for h.
                 h2_sum += bath*bath;
             }
-            e->set_elements_in_slice(bufs[0], { 0, i, firsty }, { 0, i, lasty-1 });
-            h->set_elements_in_slice(bufs[1], { i, firsty }, { i, lasty-1 });
+            e->set_elements_in_slice(bufs[0], ysz, { 0, i, firsty }, { 0, i, lasty-1 });
+            h->set_elements_in_slice(bufs[1], ysz, { i, firsty }, { i, lasty-1 });
         }
 
         for (idx_t i = firstx+1; i <= lastx-1; i++) {
@@ -231,7 +231,7 @@ int main(int argc, char** argv) {
                 double u_val = exact_u(xui, yti, 0, lx, ly);
                 bufs[0][j] = u_val;
             }
-            u->set_elements_in_slice(bufs[0], { 0, i, firsty }, { 0, i, lasty-1 });
+            u->set_elements_in_slice(bufs[0], ysz, { 0, i, firsty }, { 0, i, lasty-1 });
         }
         for (idx_t i = firstx; i <= lastx-1; i++) {
             double xti = xt->get_element({i});
@@ -241,20 +241,20 @@ int main(int argc, char** argv) {
                 double v_val = exact_v(xti, yvi, 0, lx, ly);
                 bufs[0][j] = v_val;
             }
-            v->set_elements_in_slice(bufs[0], { 0, i, firsty }, { 0, i, lasty-1 });
+            v->set_elements_in_slice(bufs[0], ysz, { 0, i, firsty }, { 0, i, lasty-1 });
         }
 
         // compute initial energy & h reductions.
         double sum_h = 0.0, max_h = -1e30;
         double pe_offset = 0.5 * g * h2_sum / nx / ny;
         double* bu0 = bufs[0];
-        u->get_elements_in_slice(bu0, { 0, firstx, firsty }, { 0, firstx, lasty });
+        u->get_elements_in_slice(bu0, ysz, { 0, firstx, firsty }, { 0, firstx, lasty });
         double* bu1 = bufs[1];
         for (idx_t i = firstx; i <= lastx-1; i++) {
-            u->get_elements_in_slice(bu1, { 0, i+1, firsty }, { 0, i+1, lasty });
-            v->get_elements_in_slice(bufs[2], { 0, i, firsty }, { 0, i, lasty });
-            e->get_elements_in_slice(bufs[3], { 0, i, firsty }, { 0, i, lasty });
-            h->get_elements_in_slice(bufs[4], { i, firsty }, { i, lasty });
+            u->get_elements_in_slice(bu1, ysz, { 0, i+1, firsty }, { 0, i+1, lasty });
+            v->get_elements_in_slice(bufs[2], ysz, { 0, i, firsty }, { 0, i, lasty });
+            e->get_elements_in_slice(bufs[3], ysz, { 0, i, firsty }, { 0, i, lasty });
+            h->get_elements_in_slice(bufs[4], ysz, { i, firsty }, { i, lasty });
             for (idx_t j = 0; j < ysz-1; j++) {
                 double u0 = bu0[j]; // u->get_element({0, i, j});
                 double u1 = bu1[j]; // u->get_element({0, i+1, j});
@@ -265,7 +265,7 @@ int main(int argc, char** argv) {
                 sum_h += bufs[4][j];
                 max_h = std::max(max_h, bufs[4][j]);
             }
-            ke->set_elements_in_slice(bufs[6], { 0, i, firsty }, { 0, i, lasty-1 });
+            ke->set_elements_in_slice(bufs[6], ysz, { 0, i, firsty }, { 0, i, lasty-1 });
 
             // Swap i & i+1 u-ptrs.
             std::swap(bu0, bu1);
@@ -318,11 +318,11 @@ int main(int argc, char** argv) {
             double sum_keH = 0.0, sum_e = 0.0, elev_max = 0.0,
                 pe_sum = 0.0, u_max = 0.0, q_max = 0.0;
             for (idx_t i = firstx; i <= lastx-1; i++) {
-                e->get_elements_in_slice(bufs[0], { ti, i, firsty }, { ti, i, lasty });
-                h->get_elements_in_slice(bufs[1], { i, firsty }, { i, lasty });
-                ke->get_elements_in_slice(bufs[2], { ti, i, firsty }, { ti, i, lasty });
-                u->get_elements_in_slice(bufs[4], { ti, i, firsty }, { ti, i, lasty });
-                q->get_elements_in_slice(bufs[5], { ti, i, firsty }, { ti, i, lasty });
+                e->get_elements_in_slice(bufs[0], ysz, { ti, i, firsty }, { ti, i, lasty });
+                h->get_elements_in_slice(bufs[1], ysz, { i, firsty }, { i, lasty });
+                ke->get_elements_in_slice(bufs[2], ysz, { ti, i, firsty }, { ti, i, lasty });
+                u->get_elements_in_slice(bufs[4], ysz, { ti, i, firsty }, { ti, i, lasty });
+                q->get_elements_in_slice(bufs[5], ysz, { ti, i, firsty }, { ti, i, lasty });
 
                 #pragma omp simd
                 for (idx_t j = 0; j < ysz-1; j++) {
@@ -385,10 +385,10 @@ int main(int argc, char** argv) {
 
         // Compute error against exact solution
         double err_L2 = 0.0;
-        yt->get_elements_in_slice(bufs[0], { firsty }, { lasty });
+        yt->get_elements_in_slice(bufs[0], ysz, { firsty }, { lasty });
         for (idx_t i = firstx; i <= lastx-1; i++) {
             double xi = xt->get_element({i});
-            e->get_elements_in_slice(bufs[1], { nt+1, i, firsty }, { nt+1, i, lasty });
+            e->get_elements_in_slice(bufs[1], ysz, { nt+1, i, firsty }, { nt+1, i, lasty });
             for (idx_t j = 0; j <= ysz-1; j++) {
                 double yi = bufs[0][j];
                 double elev_exact = exact_elev(xi, yi, t, lx, ly);

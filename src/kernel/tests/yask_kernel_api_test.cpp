@@ -323,15 +323,14 @@ int main(int argc, char** argv) {
             size_t nelems = 1;
             for (int i = 0; i < ndims; i++)
                 nelems *= asizes[i];
-            size_t bsize = nelems * esize;
-            assert(bsize >= esize);
-            os << "      allocating " << bsize << " byte(s)...\n";
-            void* buf = malloc(bsize);
+            os << "      allocating " << nelems << " element(s)...\n";
+            double* buf = new double[nelems];
             assert(buf);
+            size_t bsize = nelems * sizeof(double);
             memset(buf, 0, bsize); // Sets all reals to 0.0, whether floats or doubles.
 
             // Try with all zeros.
-            nset = var->set_elements_in_slice(buf, first_indices, last_indices);
+            nset = var->set_elements_in_slice(buf, nelems, first_indices, last_indices);
             assert(nset == nelems);
             auto v1 = var->get_element(first_indices);
             assert(v1 == 0.0);
@@ -340,11 +339,8 @@ int main(int argc, char** argv) {
 
             // Try with first element non-zero.
             double v3 = 123.0;
-            if (esize == 4)
-                ((float*)buf)[0] = float(v3);
-            else
-                ((double*)buf)[0] = v3;
-            nset = var->set_elements_in_slice(buf, first_indices, last_indices);
+            buf[0] = v3;
+            nset = var->set_elements_in_slice(buf, nelems, first_indices, last_indices);
             assert(nset == nelems);
             v1 = var->get_element(first_indices);
             assert(v1 == v3);
@@ -354,11 +350,8 @@ int main(int argc, char** argv) {
             }
 
             // Try with last element also non-zero.
-            if (esize == 4)
-                ((float*)buf)[nelems-1] = float(v3);
-            else
-                ((double*)buf)[nelems-1] = v3;
-            nset = var->set_elements_in_slice(buf, first_indices, last_indices);
+            buf[nelems-1] = v3;
+            nset = var->set_elements_in_slice(buf, nelems, first_indices, last_indices);
             assert(nset == nelems);
             v1 = var->get_element(first_indices);
             assert(v1 == v3);

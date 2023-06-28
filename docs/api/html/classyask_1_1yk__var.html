@@ -202,9 +202,12 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a42a5e0c4f28ef714f1de855ddb81877d"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a42a5e0c4f28ef714f1de855ddb81877d">set_element</a> (double val, const <a class="el" href="group__yask.html#ga9a86862ece2cddc8fb77fac850c44161">idx_t_init_list</a> &amp;indices, bool strict_indices=true)=0</td></tr>
 <tr class="memdesc:a42a5e0c4f28ef714f1de855ddb81877d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the value of one element in this var.  <br /></td></tr>
 <tr class="separator:a42a5e0c4f28ef714f1de855ddb81877d"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ad33ae6d7f03ec5fb8fa31e4ad9ff7881"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#ad33ae6d7f03ec5fb8fa31e4ad9ff7881">get_elements_in_slice</a> (void *buffer_ptr, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;first_indices, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;last_indices) const =0</td></tr>
-<tr class="memdesc:ad33ae6d7f03ec5fb8fa31e4ad9ff7881"><td class="mdescLeft">&#160;</td><td class="mdescRight">Copy elements within specified subset of this var into a buffer.  <br /></td></tr>
-<tr class="separator:ad33ae6d7f03ec5fb8fa31e4ad9ff7881"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a87233274749b94a4c847ecc4607ba0cc"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a87233274749b94a4c847ecc4607ba0cc">get_elements_in_slice</a> (float *buffer_ptr, size_t buffer_size, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;first_indices, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;last_indices) const =0</td></tr>
+<tr class="memdesc:a87233274749b94a4c847ecc4607ba0cc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Copy elements within specified subset of this var into a <code>float</code> buffer.  <br /></td></tr>
+<tr class="separator:a87233274749b94a4c847ecc4607ba0cc"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a66f55fe022bb2410c34bcc1cf59549ae"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a66f55fe022bb2410c34bcc1cf59549ae">get_elements_in_slice</a> (double *buffer_ptr, size_t buffer_size, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;first_indices, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;last_indices) const =0</td></tr>
+<tr class="memdesc:a66f55fe022bb2410c34bcc1cf59549ae"><td class="mdescLeft">&#160;</td><td class="mdescRight">Copy elements within specified subset of this var into a <code>double</code> buffer.  <br /></td></tr>
+<tr class="separator:a66f55fe022bb2410c34bcc1cf59549ae"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aac79a05181b3eee1031e27cfc0d2c145"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#aac79a05181b3eee1031e27cfc0d2c145">add_to_element</a> (double val, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;indices, bool strict_indices=true)=0</td></tr>
 <tr class="memdesc:aac79a05181b3eee1031e27cfc0d2c145"><td class="mdescLeft">&#160;</td><td class="mdescRight">Atomically add to the value of one var element.  <br /></td></tr>
 <tr class="separator:aac79a05181b3eee1031e27cfc0d2c145"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -217,9 +220,12 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:ad919afb54bbde78938a3939e76df0cd8"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#ad919afb54bbde78938a3939e76df0cd8">set_elements_in_slice_same</a> (double val, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;first_indices, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;last_indices, bool strict_indices=true)=0</td></tr>
 <tr class="memdesc:ad919afb54bbde78938a3939e76df0cd8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize var elements within specified subset of the var to the same value.  <br /></td></tr>
 <tr class="separator:ad919afb54bbde78938a3939e76df0cd8"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a56798ab60559bd84fdc204d7255ebe46"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a56798ab60559bd84fdc204d7255ebe46">set_elements_in_slice</a> (const void *buffer_ptr, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;first_indices, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;last_indices)=0</td></tr>
-<tr class="memdesc:a56798ab60559bd84fdc204d7255ebe46"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set var elements within specified subset of the var from values in a buffer.  <br /></td></tr>
-<tr class="separator:a56798ab60559bd84fdc204d7255ebe46"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5c777cd27d09dc1110c5bf87d2084500"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a5c777cd27d09dc1110c5bf87d2084500">set_elements_in_slice</a> (const float *buffer_ptr, size_t buffer_size, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;first_indices, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;last_indices)=0</td></tr>
+<tr class="memdesc:a5c777cd27d09dc1110c5bf87d2084500"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set elements within specified subset of the var from values in a <code>float</code> buffer.  <br /></td></tr>
+<tr class="separator:a5c777cd27d09dc1110c5bf87d2084500"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a489b1bdb3d658e454f0ded36f2d966e3"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a489b1bdb3d658e454f0ded36f2d966e3">set_elements_in_slice</a> (const double *buffer_ptr, size_t buffer_size, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;first_indices, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;last_indices)=0</td></tr>
+<tr class="memdesc:a489b1bdb3d658e454f0ded36f2d966e3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set elements within specified subset of the var from values in a <code>double</code> buffer.  <br /></td></tr>
+<tr class="separator:a489b1bdb3d658e454f0ded36f2d966e3"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a55d6c585b8384881065c01bb067c96dd"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a55d6c585b8384881065c01bb067c96dd">format_indices</a> (const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;indices) const =0</td></tr>
 <tr class="memdesc:a55d6c585b8384881065c01bb067c96dd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Format the indices for human-readable display.  <br /></td></tr>
 <tr class="separator:a55d6c585b8384881065c01bb067c96dd"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -289,6 +295,12 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a54fa7ad6009a8fd8d34e79e30943c68f"><td class="memItemLeft" align="right" valign="top">virtual void *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a54fa7ad6009a8fd8d34e79e30943c68f">get_raw_storage_buffer</a> ()=0</td></tr>
 <tr class="memdesc:a54fa7ad6009a8fd8d34e79e30943c68f"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Get pointer to raw data storage buffer.  <br /></td></tr>
 <tr class="separator:a54fa7ad6009a8fd8d34e79e30943c68f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a07e73d446bf5c7173d184ffc829c8f53"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a07e73d446bf5c7173d184ffc829c8f53">get_elements_in_slice</a> (void *buffer_ptr, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;first_indices, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;last_indices) const =0</td></tr>
+<tr class="memdesc:a07e73d446bf5c7173d184ffc829c8f53"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use the <code>float*</code> or <code>double*</code> version.  <br /></td></tr>
+<tr class="separator:a07e73d446bf5c7173d184ffc829c8f53"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abd557f0627796b13529f221656dfe1c2"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#abd557f0627796b13529f221656dfe1c2">set_elements_in_slice</a> (const void *buffer_ptr, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;first_indices, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;last_indices)=0</td></tr>
+<tr class="memdesc:abd557f0627796b13529f221656dfe1c2"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use the <code>float*</code> or <code>double*</code> version.  <br /></td></tr>
+<tr class="separator:abd557f0627796b13529f221656dfe1c2"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a010df6d40b808aa0d7fca274bbf5d2d4"><td class="memItemLeft" align="right" valign="top"><a id="a010df6d40b808aa0d7fca274bbf5d2d4" name="a010df6d40b808aa0d7fca274bbf5d2d4"></a>
 virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><b>get_first_rank_alloc_index</b> (const std::string &amp;dim) const</td></tr>
 <tr class="memdesc:a010df6d40b808aa0d7fca274bbf5d2d4"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__var.html#aaf5b3f06b832bbf77b8f722fda8a2998" title="Get the first valid index in this rank in the specified dimension.">get_first_local_index()</a>. <br /></td></tr>
@@ -1473,7 +1485,18 @@ Data Storage</h2>
 </div><div class="memdoc">
 
 <p>Read the value of one element in this var. </p>
-<p>Provide indices in a list in the same order returned by <a class="el" href="classyask_1_1yk__var.html#adf2e93317a2e86d80713ad56a46fdc68" title="Get all the dimensions in this var.">get_dim_names()</a>. Indices are relative to the <em>overall</em> problem domain. Index values must fall between the values returned by <a class="el" href="classyask_1_1yk__var.html#aaf5b3f06b832bbf77b8f722fda8a2998" title="Get the first valid index in this rank in the specified dimension.">get_first_local_index()</a> and <a class="el" href="classyask_1_1yk__var.html#a7266bb36c93cb6ae538a0f081f22fad7" title="Get the last index in this rank in the specified dimension.">get_last_local_index()</a>, inclusive, for each dimension in the var. </p><dl class="section return"><dt>Returns</dt><dd>value in var at given indices. </dd></dl>
+<p>Provide indices in a list in the same order listed when the var was defined, i,e., the order returned by <a class="el" href="classyask_1_1yk__var.html#adf2e93317a2e86d80713ad56a46fdc68" title="Get all the dimensions in this var.">get_dim_names()</a>. Indices are relative to the <em>overall</em> problem domain.</p>
+<dl class="section note"><dt>Note</dt><dd>The return value is a double-precision floating-point value; it will be converted to double-precision for single-precision vars.</dd>
+<dd>
+do not use this API to get many contiguous values; <a class="el" href="classyask_1_1yk__var.html#a87233274749b94a4c847ecc4607ba0cc" title="Copy elements within specified subset of this var into a float buffer.">get_elements_in_slice()</a> is much more efficient.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>value in var at given indices.</dd></dl>
+<dl class="exception"><dt>Exceptions</dt><dd>
+  <table class="exception">
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if storage has not been allocated. </td></tr>
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if are_indices_local(indices) would return <code>false</code>. </td></tr>
+  </table>
+  </dd>
+</dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">indices</td><td>List of indices, one for each var dimension. </td></tr>
@@ -1508,7 +1531,14 @@ Data Storage</h2>
 </div><div class="memdoc">
 
 <p>Read the value of one element in this var. </p>
-<p>See <a class="el" href="classyask_1_1yk__var.html#aed2d676221d5b99be7b8b8bc2cd37af2" title="Read the value of one element in this var.">get_element()</a>. </p><dl class="section return"><dt>Returns</dt><dd>value in var at given indices. </dd></dl>
+<p>See get_element(const idx_t_vec&amp; indices). </p><dl class="section return"><dt>Returns</dt><dd>value in var at given indices.</dd></dl>
+<dl class="exception"><dt>Exceptions</dt><dd>
+  <table class="exception">
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if storage has not been allocated. </td></tr>
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if are_indices_local(indices) would return <code>false</code>. </td></tr>
+  </table>
+  </dd>
+</dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">indices</td><td>List of indices, one for each var dimension. </td></tr>
@@ -1559,11 +1589,15 @@ Data Storage</h2>
 </div><div class="memdoc">
 
 <p>Set the value of one element in this var. </p>
-<p>Provide indices in a list in the same order returned by <a class="el" href="classyask_1_1yk__var.html#adf2e93317a2e86d80713ad56a46fdc68" title="Get all the dimensions in this var.">get_dim_names()</a>. Indices are relative to the <em>overall</em> problem domain. If the var uses the step dimension, the value of the step index will be used to update the current valid step indices in the var. If <code>strict_indices</code> is <code>false</code> and any non-step index values are invalid as defined by <a class="el" href="classyask_1_1yk__var.html#a3cc808533b7c6e34614409d34bec1a86" title="Determine whether the given indices refer to an accessible element in this rank.">are_indices_local()</a>, the API will have no effect and return zero (0). If storage has not been allocated for this var, this will have no effect and return zero (0) if <code>strict_indices</code> is <code>false</code>. </p><dl class="section note"><dt>Note</dt><dd>The parameter value is a double-precision floating-point value, but it will be converted to single-precision if <a class="el" href="classyask_1_1yk__solution.html#a50e565487b7175447cc9f6489221eef4" title="Get the floating-point precision size.">yk_solution::get_element_bytes()</a> returns 4. </dd></dl>
-<dl class="section return"><dt>Returns</dt><dd>Number of elements set, which will be one (1) if the indices are valid and zero (0) if they are not. </dd></dl>
+<p>Provide indices in a list in the same order returned by <a class="el" href="classyask_1_1yk__var.html#adf2e93317a2e86d80713ad56a46fdc68" title="Get all the dimensions in this var.">get_dim_names()</a>. Indices are relative to the <em>overall</em> problem domain. If the var uses the step dimension, the value of the step index will be used to update the current valid step indices in the var. If <code>strict_indices</code> is <code>false</code> and any non-step index values are invalid as defined by <a class="el" href="classyask_1_1yk__var.html#a3cc808533b7c6e34614409d34bec1a86" title="Determine whether the given indices refer to an accessible element in this rank.">are_indices_local()</a>, the API will have no effect and return zero (0).</p>
+<dl class="section note"><dt>Note</dt><dd>The parameter value is a double-precision floating-point value, but it will be converted to single-precision for single-precision vars.</dd>
+<dd>
+do not use this API to set many contiguous values; <a class="el" href="classyask_1_1yk__var.html#a5c777cd27d09dc1110c5bf87d2084500" title="Set elements within specified subset of the var from values in a float buffer.">set_elements_in_slice()</a> is much more efficient.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Number of elements set, which will be one (1) if the indices are valid and zero (0) if they are not.</dd></dl>
 <dl class="exception"><dt>Exceptions</dt><dd>
   <table class="exception">
-    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if <code>strict_indices</code> is <code>true</code> and any non-step index values are invalid or storage has not been allocated. </td></tr>
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if storage has not been allocated. </td></tr>
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if <code>strict_indices</code> is <code>true</code> and are_indices_local(indices) would return <code>false</code>. </td></tr>
   </table>
   </dd>
 </dl>
@@ -1571,7 +1605,7 @@ Data Storage</h2>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">val</td><td>Element in var will be set to this.</td></tr>
     <tr><td class="paramdir">[in]</td><td class="paramname">indices</td><td>List of indices, one for each var dimension.</td></tr>
-    <tr><td class="paramdir">[in]</td><td class="paramname">strict_indices</td><td>If true, indices must be within domain or padding. If false, indices outside of domain and padding result in no change to var. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">strict_indices</td><td>If true, indices must be within the allocated range in this rank. If false, indices outside of domain and padding result in no change to var. </td></tr>
   </table>
   </dd>
 </dl>
@@ -1619,20 +1653,27 @@ Data Storage</h2>
 </div><div class="memdoc">
 
 <p>Set the value of one element in this var. </p>
-<p>See <a class="el" href="classyask_1_1yk__var.html#ac509cdab014c58033c15b5c92f4bb7d6" title="Set the value of one element in this var.">set_element()</a>. </p><dl class="section return"><dt>Returns</dt><dd>Number of elements set. </dd></dl>
+<p>See <a class="el" href="classyask_1_1yk__var.html#ac509cdab014c58033c15b5c92f4bb7d6" title="Set the value of one element in this var.">set_element(double val, const idx_t_vec&amp; indices, bool strict_indices)</a>. </p><dl class="section return"><dt>Returns</dt><dd>Number of elements set.</dd></dl>
+<dl class="exception"><dt>Exceptions</dt><dd>
+  <table class="exception">
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if storage has not been allocated. </td></tr>
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if <code>strict_indices</code> is <code>true</code> and are_indices_local(indices) would return <code>false</code>. </td></tr>
+  </table>
+  </dd>
+</dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">val</td><td>Element in var will be set to this.</td></tr>
     <tr><td class="paramdir">[in]</td><td class="paramname">indices</td><td>List of indices, one for each var dimension.</td></tr>
-    <tr><td class="paramdir">[in]</td><td class="paramname">strict_indices</td><td>If true, indices must be within domain or padding. If false, indices outside of domain and padding result in no change to var. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">strict_indices</td><td>If true, indices must be within the allocated range in this rank. If false, indices outside of domain and padding result in no change to var. </td></tr>
   </table>
   </dd>
 </dl>
 
 </div>
 </div>
-<a id="ad33ae6d7f03ec5fb8fa31e4ad9ff7881" name="ad33ae6d7f03ec5fb8fa31e4ad9ff7881"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad33ae6d7f03ec5fb8fa31e4ad9ff7881">&#9670;&#160;</a></span>get_elements_in_slice()</h2>
+<a id="a87233274749b94a4c847ecc4607ba0cc" name="a87233274749b94a4c847ecc4607ba0cc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a87233274749b94a4c847ecc4607ba0cc">&#9670;&#160;</a></span>get_elements_in_slice() <span class="overload">[1/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -1643,8 +1684,14 @@ Data Storage</h2>
         <tr>
           <td class="memname">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> yask::yk_var::get_elements_in_slice </td>
           <td>(</td>
-          <td class="paramtype">void *&#160;</td>
+          <td class="paramtype">float *&#160;</td>
           <td class="paramname"><em>buffer_ptr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t&#160;</td>
+          <td class="paramname"><em>buffer_size</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1671,12 +1718,96 @@ Data Storage</h2>
 </table>
 </div><div class="memdoc">
 
-<p>Copy elements within specified subset of this var into a buffer. </p>
-<p>Reads all elements from <code>first_indices</code> to <code>last_indices</code> in each dimension and writes them to consecutive memory locations in the buffer. Indices in the buffer progress in row-major order, i.e., traditional C-language layout. The buffer pointed to must contain the number of bytes equal to <a class="el" href="classyask_1_1yk__solution.html#a50e565487b7175447cc9f6489221eef4" title="Get the floating-point precision size.">yk_solution::get_element_bytes()</a>, i.e., the size of a FP element, multiplied by the total number of elements in the specified slice. Thus, the buffer must be a simple flat array of data, not containing pointers; for example, for a 2-D YASK var created with indices <code>{ x, y }</code>, the buffer could be declared as <code>float A[xsize][ysize]</code>, but not as <code>float** A</code>. Since the reads proceed in row-major order, the last index is "unit-stride" in the buffer.</p>
-<p>Provide indices in two lists in the same order returned by <a class="el" href="classyask_1_1yk__var.html#adf2e93317a2e86d80713ad56a46fdc68" title="Get all the dimensions in this var.">get_dim_names()</a>. Indices are relative to the <em>overall</em> problem domain. Index values must fall between the values returned by <a class="el" href="classyask_1_1yk__var.html#aaf5b3f06b832bbf77b8f722fda8a2998" title="Get the first valid index in this rank in the specified dimension.">get_first_local_index()</a> and <a class="el" href="classyask_1_1yk__var.html#a7266bb36c93cb6ae538a0f081f22fad7" title="Get the last index in this rank in the specified dimension.">get_last_local_index()</a>, inclusive. </p><dl class="section return"><dt>Returns</dt><dd>Number of elements read. </dd></dl>
+<p>Copy elements within specified subset of this var into a <code>float</code> buffer. </p>
+<p>Reads all elements from <code>first_indices</code> to <code>last_indices</code> in each dimension and writes them to consecutive memory locations in the buffer. Indices in the buffer progress in row-major order, i.e., traditional C-language layout, using the order of dimensions when the var was declared. In other words, the last index is "unit-stride" in the buffer.</p>
+<p>The buffer pointed to must contain at least the number of floats as the total number of elements in the specified slice. Thus, the buffer must be a simple flat array of data, not containing pointers; for example, for a 2-D YASK var created via <code><a class="el" href="group__yc.html#gae3d7fce5f0ac5dba65bc16ce8a342553" title="Convenience macro for creating a yask::yc_var_proxy for an n-dimensional YASK variable.">MAKE_VAR(A, x, y)</a></code>, the buffer could be declared as <code>float A[xsize*ysize]</code> or <code>float A[xsize][ysize]</code>, but <em>not</em> as <code>float** A</code>.</p>
+<p>Provide indices in two lists in the same order used during var declaration. Indices are relative to the <em>overall</em> problem domain.</p>
+<dl class="section note"><dt>Note</dt><dd>if this is a double-precision solution, each value will be converted to a <code>float</code>, and precision will be lost. The <code>float*</code> version is also more efficient.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Number of elements read.</dd></dl>
+<dl class="exception"><dt>Exceptions</dt><dd>
+  <table class="exception">
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if the index values do not fall between the values returned by <a class="el" href="classyask_1_1yk__var.html#aaf5b3f06b832bbf77b8f722fda8a2998" title="Get the first valid index in this rank in the specified dimension.">get_first_local_index()</a> and <a class="el" href="classyask_1_1yk__var.html#a7266bb36c93cb6ae538a0f081f22fad7" title="Get the last index in this rank in the specified dimension.">get_last_local_index()</a>, inclusive.</td></tr>
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if storage has not been allocated.</td></tr>
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if <code>buffer_size</code> is less than the number of values that would be read. </td></tr>
+  </table>
+  </dd>
+</dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[out]</td><td class="paramname">buffer_ptr</td><td>Pointer to buffer where values will be written.</td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">buffer_size</td><td>Number of <code>float</code> elements in <code>buffer_ptr</code> array</td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">first_indices</td><td>List of initial indices, one for each var dimension.</td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">last_indices</td><td>List of final indices, one for each var dimension. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a66f55fe022bb2410c34bcc1cf59549ae" name="a66f55fe022bb2410c34bcc1cf59549ae"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a66f55fe022bb2410c34bcc1cf59549ae">&#9670;&#160;</a></span>get_elements_in_slice() <span class="overload">[2/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> yask::yk_var::get_elements_in_slice </td>
+          <td>(</td>
+          <td class="paramtype">double *&#160;</td>
+          <td class="paramname"><em>buffer_ptr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t&#160;</td>
+          <td class="paramname"><em>buffer_size</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;&#160;</td>
+          <td class="paramname"><em>first_indices</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;&#160;</td>
+          <td class="paramname"><em>last_indices</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Copy elements within specified subset of this var into a <code>double</code> buffer. </p>
+<p>Reads all elements from <code>first_indices</code> to <code>last_indices</code> in each dimension and writes them to consecutive memory locations in the buffer. Indices in the buffer progress in row-major order, i.e., traditional C-language layout, using the order of dimensions when the var was declared. In other words, the last index is "unit-stride" in the buffer.</p>
+<p>The buffer pointed to must contain at least the number of doubles as the total number of elements in the specified slice. Thus, the buffer must be a simple flat array of data, not containing pointers; for example, for a 2-D YASK var created via <code><a class="el" href="group__yc.html#gae3d7fce5f0ac5dba65bc16ce8a342553" title="Convenience macro for creating a yask::yc_var_proxy for an n-dimensional YASK variable.">MAKE_VAR(A, x, y)</a></code>, the buffer could be declared as <code>double A[xsize*ysize]</code> or <code>double A[xsize][ysize]</code>, but <em>not</em> as <code>double** A</code>.</p>
+<p>Provide indices in two lists in the same order used during var declaration. Indices are relative to the <em>overall</em> problem domain.</p>
+<dl class="section note"><dt>Note</dt><dd>if this is a single-precision solution, each value will be converted to a <code>double</code>. The <code>double*</code> version is more efficient.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Number of elements read.</dd></dl>
+<dl class="exception"><dt>Exceptions</dt><dd>
+  <table class="exception">
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if the index values do not fall between the values returned by <a class="el" href="classyask_1_1yk__var.html#aaf5b3f06b832bbf77b8f722fda8a2998" title="Get the first valid index in this rank in the specified dimension.">get_first_local_index()</a> and <a class="el" href="classyask_1_1yk__var.html#a7266bb36c93cb6ae538a0f081f22fad7" title="Get the last index in this rank in the specified dimension.">get_last_local_index()</a>, inclusive.</td></tr>
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if storage has not been allocated.</td></tr>
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if <code>buffer_size</code> is less than the number of values that would be read. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">buffer_ptr</td><td>Pointer to buffer where values will be written.</td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">buffer_size</td><td>Number of <code>double</code> elements in <code>buffer_ptr</code> array</td></tr>
     <tr><td class="paramdir">[in]</td><td class="paramname">first_indices</td><td>List of initial indices, one for each var dimension.</td></tr>
     <tr><td class="paramdir">[in]</td><td class="paramname">last_indices</td><td>List of final indices, one for each var dimension. </td></tr>
   </table>
@@ -1726,8 +1857,9 @@ Data Storage</h2>
 </div><div class="memdoc">
 
 <p>Atomically add to the value of one var element. </p>
-<p>Provide indices in a list in the same order returned by <a class="el" href="classyask_1_1yk__var.html#adf2e93317a2e86d80713ad56a46fdc68" title="Get all the dimensions in this var.">get_dim_names()</a>. Indices are relative to the <em>overall</em> problem domain. Index values must fall between the values returned by <a class="el" href="classyask_1_1yk__var.html#aaf5b3f06b832bbf77b8f722fda8a2998" title="Get the first valid index in this rank in the specified dimension.">get_first_local_index()</a> and <a class="el" href="classyask_1_1yk__var.html#a7266bb36c93cb6ae538a0f081f22fad7" title="Get the last index in this rank in the specified dimension.">get_last_local_index()</a>, inclusive. Updates are OpenMP atomic, meaning that this function can be called by several OpenMP threads without causing a race condition. If storage has not been allocated for this var, this will have no effect and return zero (0) if <code>strict_indices</code> is <code>false</code>. </p><dl class="section note"><dt>Note</dt><dd>The parameter value is a double-precision floating-point value, but it will be converted to single-precision if <a class="el" href="classyask_1_1yk__solution.html#a50e565487b7175447cc9f6489221eef4" title="Get the floating-point precision size.">yk_solution::get_element_bytes()</a> returns 4. </dd></dl>
-<dl class="section return"><dt>Returns</dt><dd>Number of elements updated. </dd></dl>
+<p>Provide indices in a list in the same order returned by <a class="el" href="classyask_1_1yk__var.html#adf2e93317a2e86d80713ad56a46fdc68" title="Get all the dimensions in this var.">get_dim_names()</a>. Indices are relative to the <em>overall</em> problem domain. Index values must fall between the values returned by <a class="el" href="classyask_1_1yk__var.html#aaf5b3f06b832bbf77b8f722fda8a2998" title="Get the first valid index in this rank in the specified dimension.">get_first_local_index()</a> and <a class="el" href="classyask_1_1yk__var.html#a7266bb36c93cb6ae538a0f081f22fad7" title="Get the last index in this rank in the specified dimension.">get_last_local_index()</a>, inclusive. Updates are OpenMP atomic, meaning that this function can be called by several OpenMP threads without causing a race condition. If storage has not been allocated for this var, this will have no effect and return zero (0) if <code>strict_indices</code> is <code>false</code>.</p>
+<dl class="section note"><dt>Note</dt><dd>The parameter value is a double-precision floating-point value, but it will be converted to single-precision if this is a single-precision solution.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Number of elements updated.</dd></dl>
 <dl class="exception"><dt>Exceptions</dt><dd>
   <table class="exception">
     <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if <code>strict_indices</code> is <code>true</code> and any non-step index values are invalid or storage has not been allocated. </td></tr>
@@ -1823,7 +1955,8 @@ Data Storage</h2>
 </div><div class="memdoc">
 
 <p>Initialize all var elements to the same value. </p>
-<p>Sets all allocated elements, including those in the domain and padding area to the same specified value. If storage has not been allocated, this will have no effect. </p><dl class="section note"><dt>Note</dt><dd>The parameter is a double-precision floating-point value, but it will be converted to single-precision if <a class="el" href="classyask_1_1yk__solution.html#a50e565487b7175447cc9f6489221eef4" title="Get the floating-point precision size.">yk_solution::get_element_bytes()</a> returns 4. </dd></dl>
+<p>Sets all allocated elements, including those in the domain and padding area to the same specified value. If storage has not been allocated, this will have no effect.</p>
+<dl class="section note"><dt>Note</dt><dd>The parameter is a double-precision floating-point value, but it will be converted to single-precision if <a class="el" href="classyask_1_1yk__solution.html#a50e565487b7175447cc9f6489221eef4" title="Get the floating-point precision size.">yk_solution::get_element_bytes()</a> returns 4. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">val</td><td>All elements will be set to this. </td></tr>
@@ -1880,10 +2013,13 @@ Data Storage</h2>
 </div><div class="memdoc">
 
 <p>Initialize var elements within specified subset of the var to the same value. </p>
-<p>Sets all elements from <code>first_indices</code> to <code>last_indices</code> in each dimension to the specified value. Provide indices in two lists in the same order returned by <a class="el" href="classyask_1_1yk__var.html#adf2e93317a2e86d80713ad56a46fdc68" title="Get all the dimensions in this var.">get_dim_names()</a>. Indices are relative to the <em>overall</em> problem domain. Index values must fall between the values returned by <a class="el" href="classyask_1_1yk__var.html#aaf5b3f06b832bbf77b8f722fda8a2998" title="Get the first valid index in this rank in the specified dimension.">get_first_local_index()</a> and <a class="el" href="classyask_1_1yk__var.html#a7266bb36c93cb6ae538a0f081f22fad7" title="Get the last index in this rank in the specified dimension.">get_last_local_index()</a>, inclusive, if <code>strict_indices</code> is <code>true</code>. If storage has not been allocated for this var, this will have no effect and return zero (0) if <code>strict_indices</code> is <code>false</code>. </p><dl class="section return"><dt>Returns</dt><dd>Number of elements set. </dd></dl>
+<p>Sets all elements from <code>first_indices</code> to <code>last_indices</code> in each dimension to the specified value. Provide indices in two lists in the same order used during var declaration. Indices are relative to the <em>overall</em> problem domain.</p>
+<p>If storage has not been allocated for this var, this will have no effect and return zero (0) if <code>strict_indices</code> is <code>false</code>.</p>
+<dl class="section note"><dt>Note</dt><dd>The parameter is a double-precision floating-point value, but it will be converted to single-precision if this is a single-precision solution.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Number of elements set.</dd></dl>
 <dl class="exception"><dt>Exceptions</dt><dd>
   <table class="exception">
-    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if <code>strict_indices</code> is <code>true</code> and any non-step index values are invalid or storage has not been allocated. </td></tr>
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if <code>strict_indices</code> is <code>true</code> and any non-step index values do not fall between the values returned by <a class="el" href="classyask_1_1yk__var.html#aaf5b3f06b832bbf77b8f722fda8a2998" title="Get the first valid index in this rank in the specified dimension.">get_first_local_index()</a> and <a class="el" href="classyask_1_1yk__var.html#a7266bb36c93cb6ae538a0f081f22fad7" title="Get the last index in this rank in the specified dimension.">get_last_local_index()</a>, inclusive, or storage has not been allocated. </td></tr>
   </table>
   </dd>
 </dl>
@@ -1899,8 +2035,8 @@ Data Storage</h2>
 
 </div>
 </div>
-<a id="a56798ab60559bd84fdc204d7255ebe46" name="a56798ab60559bd84fdc204d7255ebe46"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a56798ab60559bd84fdc204d7255ebe46">&#9670;&#160;</a></span>set_elements_in_slice()</h2>
+<a id="a5c777cd27d09dc1110c5bf87d2084500" name="a5c777cd27d09dc1110c5bf87d2084500"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5c777cd27d09dc1110c5bf87d2084500">&#9670;&#160;</a></span>set_elements_in_slice() <span class="overload">[1/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -1911,8 +2047,14 @@ Data Storage</h2>
         <tr>
           <td class="memname">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> yask::yk_var::set_elements_in_slice </td>
           <td>(</td>
-          <td class="paramtype">const void *&#160;</td>
+          <td class="paramtype">const float *&#160;</td>
           <td class="paramname"><em>buffer_ptr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t&#160;</td>
+          <td class="paramname"><em>buffer_size</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1939,18 +2081,96 @@ Data Storage</h2>
 </table>
 </div><div class="memdoc">
 
-<p>Set var elements within specified subset of the var from values in a buffer. </p>
-<p>Reads elements from consecutive memory locations, starting at <code>buffer_ptr</code> and writes them from <code>first_indices</code> to <code>last_indices</code> in each dimension. Indices in the buffer progress in row-major order, i.e., traditional C-language layout. The buffer pointed to must contain the number of bytes equal to <a class="el" href="classyask_1_1yk__solution.html#a50e565487b7175447cc9f6489221eef4" title="Get the floating-point precision size.">yk_solution::get_element_bytes()</a>, i.e., the size of a FP element, multiplied by the total number of elements in the specified slice. Thus, the buffer must be a simple flat array of data, not containing pointers; for example, for a 2-D YASK var created with indices <code>{ x, y }</code>, the buffer could be declared as <code>float A[xsize][ysize]</code>, but not as <code>float** A</code>. Since the writes proceed in row-major order, the last index is "unit-stride" in the buffer.</p>
-<p>Provide indices in two lists in the same order returned by <a class="el" href="classyask_1_1yk__var.html#adf2e93317a2e86d80713ad56a46fdc68" title="Get all the dimensions in this var.">get_dim_names()</a>. Indices are relative to the <em>overall</em> problem domain. Index values must fall between the values returned by <a class="el" href="classyask_1_1yk__var.html#aaf5b3f06b832bbf77b8f722fda8a2998" title="Get the first valid index in this rank in the specified dimension.">get_first_local_index()</a> and <a class="el" href="classyask_1_1yk__var.html#a7266bb36c93cb6ae538a0f081f22fad7" title="Get the last index in this rank in the specified dimension.">get_last_local_index()</a>, inclusive. </p><dl class="section return"><dt>Returns</dt><dd>Number of elements written. </dd></dl>
+<p>Set elements within specified subset of the var from values in a <code>float</code> buffer. </p>
+<p>Reads <code>float</code> values from consecutive memory locations, starting at <code>buffer_ptr</code> and writes them from <code>first_indices</code> to <code>last_indices</code> in each dimension. Indices in the buffer progress in row-major order, i.e., traditional C-language layout, using the order of dimensions when the var was declared. In other words, the last index is "unit-stride" in the buffer.</p>
+<p>The buffer pointed to must contain at least the number of floats as the total number of elements in the specified slice. Thus, the buffer must be a simple flat array of data, not containing pointers; for example, for a 2-D YASK var created via <code><a class="el" href="group__yc.html#gae3d7fce5f0ac5dba65bc16ce8a342553" title="Convenience macro for creating a yask::yc_var_proxy for an n-dimensional YASK variable.">MAKE_VAR(A, x, y)</a></code>, the buffer could be declared as <code>float A[xsize*ysize]</code> or <code>float A[xsize][ysize]</code>, but <em>not</em> as <code>float** A</code>.</p>
+<p>Provide indices in two lists in the same order used during var declaration. Indices are relative to the <em>overall</em> problem domain.</p>
+<dl class="section note"><dt>Note</dt><dd>if this is a double-precision solution, each value will be converted to a <code>double</code>. The <code>double*</code> version is more efficient.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Number of elements written.</dd></dl>
 <dl class="exception"><dt>Exceptions</dt><dd>
   <table class="exception">
-    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if storage has not been allocated. </td></tr>
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if the index values do not fall between the values returned by <a class="el" href="classyask_1_1yk__var.html#aaf5b3f06b832bbf77b8f722fda8a2998" title="Get the first valid index in this rank in the specified dimension.">get_first_local_index()</a> and <a class="el" href="classyask_1_1yk__var.html#a7266bb36c93cb6ae538a0f081f22fad7" title="Get the last index in this rank in the specified dimension.">get_last_local_index()</a>, inclusive.</td></tr>
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if storage has not been allocated.</td></tr>
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if <code>buffer_size</code> is less than the number of values that would be written. </td></tr>
   </table>
   </dd>
 </dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[out]</td><td class="paramname">buffer_ptr</td><td>Pointer to buffer where values will be read.</td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">buffer_size</td><td>Number of <code>float</code> elements in <code>buffer_ptr</code> array</td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">first_indices</td><td>List of initial indices, one for each var dimension.</td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">last_indices</td><td>List of final indices, one for each var dimension. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a489b1bdb3d658e454f0ded36f2d966e3" name="a489b1bdb3d658e454f0ded36f2d966e3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a489b1bdb3d658e454f0ded36f2d966e3">&#9670;&#160;</a></span>set_elements_in_slice() <span class="overload">[2/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> yask::yk_var::set_elements_in_slice </td>
+          <td>(</td>
+          <td class="paramtype">const double *&#160;</td>
+          <td class="paramname"><em>buffer_ptr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t&#160;</td>
+          <td class="paramname"><em>buffer_size</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;&#160;</td>
+          <td class="paramname"><em>first_indices</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;&#160;</td>
+          <td class="paramname"><em>last_indices</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Set elements within specified subset of the var from values in a <code>double</code> buffer. </p>
+<p>Reads <code>double</code> values from consecutive memory locations, starting at <code>buffer_ptr</code> and writes them from <code>first_indices</code> to <code>last_indices</code> in each dimension. Indices in the buffer progress in row-major order, i.e., traditional C-language layout, using the order of dimensions when the var was declared. In other words, the last index is "unit-stride" in the buffer.</p>
+<p>The buffer pointed to must contain at least the number of doubles as the total number of elements in the specified slice. Thus, the buffer must be a simple flat array of data, not containing pointers; for example, for a 2-D YASK var created via <code><a class="el" href="group__yc.html#gae3d7fce5f0ac5dba65bc16ce8a342553" title="Convenience macro for creating a yask::yc_var_proxy for an n-dimensional YASK variable.">MAKE_VAR(A, x, y)</a></code>, the buffer could be declared as <code>double A[xsize*ysize]</code> or <code>double A[xsize][ysize]</code>, but <em>not</em> as <code>double** A</code>.</p>
+<p>Provide indices in two lists in the same order used during var declaration. Indices are relative to the <em>overall</em> problem domain.</p>
+<dl class="section note"><dt>Note</dt><dd>if this is a single-precision solution, each value will be converted to a <code>float</code>, and precision will be lost. The <code>float*</code> version is also more efficient.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Number of elements written.</dd></dl>
+<dl class="exception"><dt>Exceptions</dt><dd>
+  <table class="exception">
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if the index values do not fall between the values returned by <a class="el" href="classyask_1_1yk__var.html#aaf5b3f06b832bbf77b8f722fda8a2998" title="Get the first valid index in this rank in the specified dimension.">get_first_local_index()</a> and <a class="el" href="classyask_1_1yk__var.html#a7266bb36c93cb6ae538a0f081f22fad7" title="Get the last index in this rank in the specified dimension.">get_last_local_index()</a>, inclusive.</td></tr>
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if storage has not been allocated.</td></tr>
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if <code>buffer_size</code> is less than the number of values that would be written. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">buffer_ptr</td><td>Pointer to buffer where values will be read.</td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">buffer_size</td><td>Number of <code>double</code> elements in <code>buffer_ptr</code> array</td></tr>
     <tr><td class="paramdir">[in]</td><td class="paramname">first_indices</td><td>List of initial indices, one for each var dimension.</td></tr>
     <tr><td class="paramdir">[in]</td><td class="paramname">last_indices</td><td>List of final indices, one for each var dimension. </td></tr>
   </table>
@@ -2845,6 +3065,116 @@ Data Storage</h2>
 <li>You should not perform any operations dependent on the logical indices of any element via raw buffer, e.g., matrix multiply.</li>
 </ul>
 <dl class="section return"><dt>Returns</dt><dd>Pointer to raw data storage if <a class="el" href="classyask_1_1yk__var.html#a3b09855a3cfa7e43c32fc43a24503340" title="[Advanced] Determine whether storage has been allocated.">is_storage_allocated()</a> returns <code>true</code> or NULL otherwise. </dd></dl>
+
+</div>
+</div>
+<a id="a07e73d446bf5c7173d184ffc829c8f53" name="a07e73d446bf5c7173d184ffc829c8f53"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a07e73d446bf5c7173d184ffc829c8f53">&#9670;&#160;</a></span>get_elements_in_slice() <span class="overload">[3/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> yask::yk_var::get_elements_in_slice </td>
+          <td>(</td>
+          <td class="paramtype">void *&#160;</td>
+          <td class="paramname"><em>buffer_ptr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;&#160;</td>
+          <td class="paramname"><em>first_indices</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;&#160;</td>
+          <td class="paramname"><em>last_indices</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p><b>[Deprecated]</b> Use the <code>float*</code> or <code>double*</code> version. </p>
+<dl class="section note"><dt>Note</dt><dd>This version does no type conversion. The type of elements in the buffer must match the type of elements in the var.</dd>
+<dd>
+At this time, this <code>void*</code> version is the only one available in the Python APIs. </dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">buffer_ptr</td><td>Pointer to buffer where values will be written.</td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">first_indices</td><td>List of initial indices, one for each var dimension.</td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">last_indices</td><td>List of final indices, one for each var dimension. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="abd557f0627796b13529f221656dfe1c2" name="abd557f0627796b13529f221656dfe1c2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abd557f0627796b13529f221656dfe1c2">&#9670;&#160;</a></span>set_elements_in_slice() <span class="overload">[3/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> yask::yk_var::set_elements_in_slice </td>
+          <td>(</td>
+          <td class="paramtype">const void *&#160;</td>
+          <td class="paramname"><em>buffer_ptr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;&#160;</td>
+          <td class="paramname"><em>first_indices</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;&#160;</td>
+          <td class="paramname"><em>last_indices</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p><b>[Deprecated]</b> Use the <code>float*</code> or <code>double*</code> version. </p>
+<dl class="section note"><dt>Note</dt><dd>This version does no type conversion. The type of elements in the buffer must match the type of elements in the var.</dd>
+<dd>
+At this time, this <code>void*</code> version is the only one available in the Python APIs. </dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[out]</td><td class="paramname">buffer_ptr</td><td>Pointer to buffer where values will be read.</td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">first_indices</td><td>List of initial indices, one for each var dimension.</td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">last_indices</td><td>List of final indices, one for each var dimension. </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>

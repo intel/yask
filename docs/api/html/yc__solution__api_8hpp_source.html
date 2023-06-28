@@ -225,16 +225,16 @@ $(function() {
 <div class="line"><a id="l00230" name="l00230"></a><span class="lineno"><a class="line" href="group__yc.html#ga03ed1eacd8ce2afafd8fb011124f1957">  230</a></span><span class="preprocessor">    #define MAKE_MISC_INDEX(dim_name)   yc_index_node_ptr dim_name = new_misc_index(#dim_name)</span></div>
 <div class="line"><a id="l00231" name="l00231"></a><span class="lineno">  231</span> </div>
 <div class="line"><a id="l00233" name="l00233"></a><span class="lineno">  233</span><span class="comment">    /*** Example: `MAKE_VAR(pressure, t, x, y, z)` */</span></div>
-<div class="line"><a id="l00234" name="l00234"></a><span class="lineno"><a class="line" href="group__yc.html#gae3d7fce5f0ac5dba65bc16ce8a342553">  234</a></span><span class="preprocessor">    #define MAKE_VAR(var_name, ...) \</span></div>
+<div class="line"><a id="l00234" name="l00234"></a><span class="lineno"><a class="line" href="group__yc.html#gae3d7fce5f0ac5dba65bc16ce8a342553">  234</a></span><span class="preprocessor">    #define MAKE_VAR(var_name, ...)                                     \</span></div>
 <div class="line"><a id="l00235" name="l00235"></a><span class="lineno">  235</span><span class="preprocessor">        yc_var_proxy var_name = yc_var_proxy(#var_name, get_soln(), { __VA_ARGS__ }, false)</span></div>
 <div class="line"><a id="l00236" name="l00236"></a><span class="lineno">  236</span>    </div>
-<div class="line"><a id="l00238" name="l00238"></a><span class="lineno"><a class="line" href="group__yc.html#ga88e55b6e366e52e371a6a3335e40ecd4">  238</a></span><span class="preprocessor">    #define MAKE_SCRATCH_VAR(var_name, ...) \</span></div>
+<div class="line"><a id="l00238" name="l00238"></a><span class="lineno"><a class="line" href="group__yc.html#ga88e55b6e366e52e371a6a3335e40ecd4">  238</a></span><span class="preprocessor">    #define MAKE_SCRATCH_VAR(var_name, ...)                             \</span></div>
 <div class="line"><a id="l00239" name="l00239"></a><span class="lineno">  239</span><span class="preprocessor">        yc_var_proxy var_name = yc_var_proxy(#var_name, get_soln(), { __VA_ARGS__ }, true)</span></div>
 <div class="line"><a id="l00240" name="l00240"></a><span class="lineno">  240</span>    </div>
 <div class="line"><a id="l00242" name="l00242"></a><span class="lineno"><a class="line" href="group__yc.html#gaeffa30a0f89b2b06f584de318b844b06">  242</a></span><span class="preprocessor">    #define MAKE_SCALAR_VAR(var_name) MAKE_VAR(var_name)</span></div>
 <div class="line"><a id="l00243" name="l00243"></a><span class="lineno">  243</span> </div>
 <div class="line"><a id="l00245" name="l00245"></a><span class="lineno">  245</span>    <span class="comment">// and registering it in the list used by the YASK compiler binary.</span></div>
-<div class="line"><a id="l00246" name="l00246"></a><span class="lineno"><a class="line" href="group__yc.html#ga5da241c3ace73c5bf889aa973ab4a867">  246</a></span><span class="preprocessor">    #define REGISTER_SOLUTION(class_name)                       \</span></div>
+<div class="line"><a id="l00246" name="l00246"></a><span class="lineno"><a class="line" href="group__yc.html#ga5da241c3ace73c5bf889aa973ab4a867">  246</a></span><span class="preprocessor">    #define REGISTER_SOLUTION(class_name)               \</span></div>
 <div class="line"><a id="l00247" name="l00247"></a><span class="lineno">  247</span><span class="preprocessor">        static class_name class_name ## _instance</span></div>
 <div class="line"><a id="l00248" name="l00248"></a><span class="lineno">  248</span>    </div>
 <div class="line"><a id="l00251" name="l00251"></a><span class="lineno">  251</span>} <span class="comment">// namespace yask.</span></div>

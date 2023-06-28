@@ -37,10 +37,11 @@ SWE_EXE		:=	$(BIN_OUT_DIR)/swe.exe
 default: $(SWE_EXE)
 
 $(SWE_EXE): swe_main.cpp $(YK_LIB)
-	$(MAKE) -C $(YASK_BASE) stencil=$(stencil) real_bytes=$(real_bytes)
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) $(YK_LIBS) -o $@
 	@ls -l $@
 
-$(YK_LIB):
+$(YK_LIB): FORCE
 	$(MAKE) -C $(YASK_BASE) stencil=$(stencil) real_bytes=$(real_bytes)
+
+FORCE:
 

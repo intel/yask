@@ -896,10 +896,30 @@ namespace yask {
                                          const Indices& last_indices,
                                          bool strict_indices,
                                          bool on_device);
+        idx_t set_elements_in_slice(const double* buffer_ptr,
+                                    size_t buffer_size,
+                                    const Indices& first_indices,
+                                    const Indices& last_indices,
+                                    bool on_device);
+        idx_t set_elements_in_slice(const float* buffer_ptr,
+                                    size_t buffer_size,
+                                    const Indices& first_indices,
+                                    const Indices& last_indices,
+                                    bool on_device);
         idx_t set_elements_in_slice(const void* buffer_ptr,
                                     const Indices& first_indices,
                                     const Indices& last_indices,
                                     bool on_device);
+        idx_t get_elements_in_slice(double* buffer_ptr,
+                                    size_t buffer_size,
+                                    const Indices& first_indices,
+                                    const Indices& last_indices,
+                                    bool on_device) const;
+        idx_t get_elements_in_slice(float* buffer_ptr,
+                                    size_t buffer_size,
+                                    const Indices& first_indices,
+                                    const Indices& last_indices,
+                                    bool on_device) const;
         idx_t get_elements_in_slice(void* buffer_ptr,
                                     const Indices& first_indices,
                                     const Indices& last_indices,
@@ -967,20 +987,19 @@ namespace yask {
         //                    idx_t pofs, // offset into buffer.
         //                    const Indices& pt, // point in 'this' var.
         //                    idx_t ti);  // precomputed step index.
-        template<typename Visitor>
+        template<typename Visitor, typename T>
         idx_t _visit_elements_in_slice(bool strict_indices,
-                                       void* buffer_ptr,
+                                       T* buffer_ptr,
+                                       size_t buffer_size,
                                        const Indices& in_first_indices,
                                        const Indices& in_last_indices,
                                        bool on_device) {
             STATE_VARS(this);
             if (get_storage() == 0) {
-                if (strict_indices)
-                    THROW_YASK_EXCEPTION(std::string("call to '") +
-                                         Visitor::fname() +
-                                         "' with no storage allocated for var '" +
-                                         get_name() + "'");
-                return 0;
+                THROW_YASK_EXCEPTION(std::string("call to '") +
+                                     Visitor::fname() +
+                                     "' with no storage allocated for var '" +
+                                     get_name() + "'");
             }
             if (buffer_ptr == 0) {
                 THROW_YASK_EXCEPTION(std::string("call to '") +
@@ -1007,6 +1026,11 @@ namespace yask {
                       make_index_string(range));
             if (ne <= 0)
                 return 0;
+            if (buffer_size < ne)
+                THROW_YASK_EXCEPTION(std::string("call to '") +
+                                     Visitor::fname() + "' with buffer of size " +
+                                     std::to_string(buffer_size) + "; " +
+                                     std::to_string(ne) + " needed");
 
             // Iterate through step index in outer loop.
             // This avoids calling _wrap_step(t) at every point.
@@ -1068,7 +1092,7 @@ namespace yask {
                                  #endif
                              
                                  // Call visitor.
-                                 Visitor::visit(this, (real_t*)buffer_ptr, bofs, pt, ti);
+                                 Visitor::visit(this, buffer_ptr, bofs, pt, ti);
                                  if (ndims_left)
                                      pt[ip]++;
                              }
@@ -1091,8 +1115,101 @@ namespace yask {
             TRACE_MSG(Visitor::fname() << " returns " << ne);
             return ne;
         }
+
+        // Read into buffer from *this.
+        template<typename T>
+        idx_t _get_elements_in_slice(T* buffer_ptr,
+                                     size_t buffer_size,
+                                     const Indices& first_indices,
+                                     const Indices& last_indices,
+                                     bool on_device) const {
+
+            // A specialized visitor.
+            struct GetElem {
+                static const char* fname() {
+                    return "get_elements_in_slice";
+                }
+
+                // Copy from the var to the buffer.
+                ALWAYS_INLINE
+                static void visit(YkVarBase* varp,
+                                  T* p, idx_t pofs,
+                                  const Indices& pt, idx_t ti) {
+
+                    // Read from var.
+                    real_t val = varp->read_elem(pt, ti, __LINE__);
+
+                    // Write to buffer at proper index, converting
+                    // type if needed.
+                    p[pofs] = T(val);
+                }
+            };
+
+            if (on_device)
+                const_copy_data_to_device();
+            else
+                const_copy_data_from_device();
         
-    };
+            // Call the generic visit.
+            auto n = const_cast<YkVarBase*>(this)->
+                _visit_elements_in_slice<GetElem, T>(true, buffer_ptr, buffer_size,
+                                                     first_indices, last_indices, on_device);
+
+            // Return number of writes.
+            return n;
+        }
+
+        // Write to *this from buffer.
+        template<typename T>
+        idx_t _set_elements_in_slice(const T* buffer_ptr,
+                                     size_t buffer_size,
+                                     const Indices& first_indices,
+                                     const Indices& last_indices,
+                                     bool on_device) {
+            
+            // A specialized visitor.
+            struct SetElem {
+                static const char* fname() {
+                    return "set_elements_in_slice";
+                }
+
+                // Copy from the buffer to the var.
+                ALWAYS_INLINE
+                static void visit(YkVarBase* varp,
+                                  T* p, idx_t pofs,
+                                  const Indices& pt, idx_t ti) {
+
+                    // Read from buffer, converting type if needed.
+                    real_t val = p[pofs];
+
+                    // Write to var
+                    varp->write_elem(val, pt, ti, __LINE__);
+                }
+            };
+
+            if (on_device)
+                const_copy_data_to_device();
+            else
+                const_copy_data_from_device();
+        
+            // Call the generic visit.
+            auto n = 
+                _visit_elements_in_slice<SetElem, T>(true, (T*)buffer_ptr, buffer_size,
+                                                     first_indices, last_indices, on_device);
+            
+            // Set appropriate dirty flags.
+            if (on_device)
+                _coh.mod_dev();
+            else
+                _coh.mod_host();
+            set_dirty_in_slice(first_indices, last_indices);
+
+            // Return number of writes.
+            return n;
+        }
+        
+        
+    }; // YkVarBase.
     typedef std::shared_ptr<YkVarBase> VarBasePtr;
 
     // YASK var of real elements.
@@ -1946,12 +2063,46 @@ namespace yask {
             const Indices indices2(indices);
             return get_element(indices2);
         }
+        virtual idx_t get_elements_in_slice(double* buffer_ptr,
+                                            size_t buffer_size,
+                                            const Indices& first_indices,
+                                            const Indices& last_indices,
+                                            bool on_device) const {
+            return gb().get_elements_in_slice(buffer_ptr, buffer_size,
+                                              first_indices, last_indices, on_device);
+        }
+        virtual idx_t get_elements_in_slice(float* buffer_ptr,
+                                            size_t buffer_size,
+                                            const Indices& first_indices,
+                                            const Indices& last_indices,
+                                            bool on_device) const {
+            return gb().get_elements_in_slice(buffer_ptr, buffer_size,
+                                              first_indices, last_indices, on_device);
+        }
         virtual idx_t get_elements_in_slice(void* buffer_ptr,
                                             const Indices& first_indices,
                                             const Indices& last_indices,
                                             bool on_device) const {
             return gb().get_elements_in_slice(buffer_ptr,
                                               first_indices, last_indices, on_device);
+        }
+        virtual idx_t get_elements_in_slice(double* buffer_ptr,
+                                            size_t buffer_size,
+                                            const VarIndices& first_indices,
+                                            const VarIndices& last_indices) const {
+            const Indices first(first_indices);
+            const Indices last(last_indices);
+            return get_elements_in_slice(buffer_ptr, buffer_size,
+                                         first, last, false);
+        }
+        virtual idx_t get_elements_in_slice(float* buffer_ptr,
+                                            size_t buffer_size,
+                                            const VarIndices& first_indices,
+                                            const VarIndices& last_indices) const {
+            const Indices first(first_indices);
+            const Indices last(last_indices);
+            return get_elements_in_slice(buffer_ptr, buffer_size,
+                                         first, last, false);
         }
         virtual idx_t get_elements_in_slice(void* buffer_ptr,
                                             const VarIndices& first_indices,
@@ -2013,12 +2164,44 @@ namespace yask {
             return set_elements_in_slice_same(val, first, last, strict_indices, false);
         }
 
+        virtual idx_t set_elements_in_slice(const double* buffer_ptr,
+                                            size_t buffer_size,
+                                            const Indices& first_indices,
+                                            const Indices& last_indices,
+                                            bool on_device) {
+            return gb().set_elements_in_slice(buffer_ptr, buffer_size,
+                                              first_indices, last_indices, on_device);
+        }
+        virtual idx_t set_elements_in_slice(const float* buffer_ptr,
+                                            size_t buffer_size,
+                                            const Indices& first_indices,
+                                            const Indices& last_indices,
+                                            bool on_device) {
+            return gb().set_elements_in_slice(buffer_ptr, buffer_size,
+                                              first_indices, last_indices, on_device);
+        }
         virtual idx_t set_elements_in_slice(const void* buffer_ptr,
                                             const Indices& first_indices,
                                             const Indices& last_indices,
                                             bool on_device) {
             return gb().set_elements_in_slice(buffer_ptr,
                                               first_indices, last_indices, on_device);
+        }
+        virtual idx_t set_elements_in_slice(const double* buffer_ptr,
+                                            size_t buffer_size,
+                                            const VarIndices& first_indices,
+                                            const VarIndices& last_indices) {
+            const Indices first(first_indices);
+            const Indices last(last_indices);
+            return set_elements_in_slice(buffer_ptr, buffer_size, first, last, false);
+        }
+        virtual idx_t set_elements_in_slice(const float* buffer_ptr,
+                                            size_t buffer_size,
+                                            const VarIndices& first_indices,
+                                            const VarIndices& last_indices) {
+            const Indices first(first_indices);
+            const Indices last(last_indices);
+            return set_elements_in_slice(buffer_ptr, buffer_size, first, last, false);
         }
         virtual idx_t set_elements_in_slice(const void* buffer_ptr,
                                             const VarIndices& first_indices,

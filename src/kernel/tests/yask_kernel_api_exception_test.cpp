@@ -65,6 +65,10 @@ int main() {
         fvar_sizes.push_back(5);
     auto fvar = soln->new_fixed_size_var("fvar", soln_dims, fvar_sizes);
 
+    // Its range.
+    auto first_idxs = fvar->get_first_local_index_vec();
+    auto last_idxs = fvar->get_last_local_index_vec();
+    
     // Exception test
     cout << "Exception Test: Call 'run_solution' without calling prepare_solution().\n";
     num_expected++;
@@ -94,9 +98,10 @@ int main() {
     num_expected++;
     try {
 
-        // Make a vector with one extra index.
-        auto idxs = fvar_sizes;
-        idxs.push_back(10);
+        // Indices.
+        auto idxs = first_idxs;
+        idxs.push_back(10);     // Extra index.
+        
         fvar->set_element(3.14, idxs);
     }  catch (yask_exception& e) {
         cout << e.get_message() << endl;
@@ -107,13 +112,26 @@ int main() {
     num_expected++;
     try {
 
-        // Make a vector with one extra index.
-        auto first_idxs = fvar_sizes;
-        auto last_idxs = fvar_sizes;
-        first_idxs.push_back(10);
+        // Indices.
+        auto first_idxs2 = first_idxs;
+        first_idxs2.push_back(10); // Extra index.
 
-        void* a = malloc(1024); // Bogus, but not used.
-        fvar->set_elements_in_slice(a, first_idxs, last_idxs);
+        auto nelems = fvar->get_num_storage_elements();
+        double* a = new double[nelems];
+        fvar->set_elements_in_slice(a, nelems, first_idxs2, last_idxs);
+        free(a);
+    }  catch (yask_exception& e) {
+        cout << e.get_message() << endl;
+        num_exception++;
+    }
+
+    cout << "Exception Test: Call 'get_elements_in_slice' with insufficient buffer.\n";
+    num_expected++;
+    try {
+
+        size_t nelems = fvar->get_num_storage_elements() / 2;
+        double* a = new double[nelems];
+        fvar->get_elements_in_slice(a, nelems, first_idxs, last_idxs);
         free(a);
     }  catch (yask_exception& e) {
         cout << e.get_message() << endl;

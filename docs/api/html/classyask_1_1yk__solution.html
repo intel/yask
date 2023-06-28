@@ -2059,27 +2059,25 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 
 <p>Run the stencil solution for the specified steps. </p>
 <p>The stencil(s) in the solution are applied to the var data, setting the index variables as follows:</p><ol type="1">
-<li>If temporal tiling is <em>not</em> used (the default):<ul>
-<li>The step index (e.g., <code>t</code> for "time") will be sequentially set to values from <code>first_step_index</code> to <code>last_step_index</code>, inclusive.<ul>
+<li>If temporal tiling is <em>not</em> used (the default):</li>
+</ol>
+<ul>
+<li>The step index (e.g., <code>t</code> for "time") will be sequentially set to values from <code>first_step_index</code> to <code>last_step_index</code>, inclusive.</li>
 <li>If the stencil equations were defined with dependencies on lower-valued steps, e.g., <code>t+1</code> depends on <code>t</code>, then <code>last_step_index</code> should be greater than or equal to <code>first_step_index</code> (forward solution).</li>
 <li>If the stencil equations were defined with dependencies on higher-valued steps, e.g., <code>t-1</code> depends on <code>t</code>, then <code>last_step_index</code> should be less than or equal to <code>first_step_index</code> (reverse solution).</li>
-</ul>
-</li>
 <li>For each step index, the domain indices will be set to values across the entire domain as returned by <a class="el" href="classyask_1_1yk__solution.html#aaba39cb06c9f61d408695009667fe8cd" title="Get the global-domain size in the specified dimension, i.e., the total size across all MPI ranks.">yk_solution::get_overall_domain_size()</a> (not necessarily sequentially).</li>
 <li>MPI halo exchanges will occur as necessary before or during each step.</li>
 </ul>
-</li>
-<li><b>[Advanced]</b> If temporal wave-front tiling <em>is</em> enabled:<ul>
-<li>The step index (e.g., <code>t</code> for "time") will be sequentially set to values from <code>first_step_index</code> to <code>last_step_index</code>, inclusive, within each area configured for temporal tiling.<ul>
+<ol type="1">
+<li><b>[Advanced]</b> If temporal wave-front tiling <em>is</em> enabled:</li>
+</ol>
+<ul>
+<li>The step index (e.g., <code>t</code> for "time") will be sequentially set to values from <code>first_step_index</code> to <code>last_step_index</code>, inclusive, within each area configured for temporal tiling.</li>
 <li>The number of steps in an area may also be restricted by the size of the area in the step dimension. In that case, tiles will be done in temporal slices of that size.</li>
-</ul>
-</li>
 <li>For each step index within each area, the domain indices will be set to values across the entire area (not necessarily sequentially).</li>
 <li>Ultimately, the stencil(s) will be applied to same the elements in both the step and domain dimensions as when wave-front tiling is not used.</li>
 <li>MPI halo exchanges may occur at less frequent intervals.</li>
 </ul>
-</li>
-</ol>
 <p>This function should be called only <em>after</em> calling <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a>.</p>
 <p>Since this function initiates MPI communication, it must be called on all MPI ranks, and it will block until all ranks have completed. </p>
 <dl class="params"><dt>Parameters</dt><dd>
@@ -2121,7 +2119,7 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 <p>Typical C++ usage:</p>
 <div class="fragment"><div class="line">soln-&gt;prepare_solution();</div>
 <div class="line"><span class="keywordflow">for</span> (<a class="code hl_typedef" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> t = 1; t &lt;= num_steps; t++)</div>
-<div class="line">    soln-&gt;run_solution(t);</div>
+<div class="line">soln-&gt;run_solution(t);</div>
 <div class="line">soln-&gt;end_solution();</div>
 <div class="ttc" id="agroup__yask_html_ga1dd7066686ff93559a0f28979be12d81"><div class="ttname"><a href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">yask::idx_t</a></div><div class="ttdeci">YASK_INT64_T idx_t</div><div class="ttdoc">Type to use for indexing grids.</div><div class="ttdef"><b>Definition:</b> yask_common_api.hpp:79</div></div>
 </div><!-- fragment --><p>As written, the above loop is identical to</p>
@@ -2411,7 +2409,7 @@ Side effect: outputs stats in human-readable format to current debug output obje
 <li>Halo size.</li>
 <li>Value provided by any of the pad-size setting functions.</li>
 </ul>
-<p>Setting the minimum pad size is useful when an application needs to copy data back and forth between YASK vars and legacy C-style arrays that include a certain halo size that may be larger than the halo calculated by the YASK compiler. For example, for a given stencil problem, one or more YASK variables might need a halo of width 2 in the x dimension, but only 1 in the y dimension due to the stencil radii in the respective dimensions. However, an application might have an existing C-style array with halo data of width 2 in both x and y dimensions. By calling <code>set_min_pad_size("y", 2)</code>, all YASK vars will be created with padding widths of at least 2 in the y dimension, making it easier to copy data to and from the C-style arrays using <a class="el" href="classyask_1_1yk__var.html#ad33ae6d7f03ec5fb8fa31e4ad9ff7881" title="Copy elements within specified subset of this var into a buffer.">yk_var::get_elements_in_slice()</a> and <a class="el" href="classyask_1_1yk__var.html#a56798ab60559bd84fdc204d7255ebe46" title="Set var elements within specified subset of the var from values in a buffer.">yk_var::set_elements_in_slice()</a>.</p>
+<p>Setting the minimum pad size is useful when an application needs to copy data back and forth between YASK vars and legacy C-style arrays that include a certain halo size that may be larger than the halo calculated by the YASK compiler. For example, for a given stencil problem, one or more YASK variables might need a halo of width 2 in the x dimension, but only 1 in the y dimension due to the stencil radii in the respective dimensions. However, an application might have an existing C-style array with halo data of width 2 in both x and y dimensions. By calling <code>set_min_pad_size("y", 2)</code>, all YASK vars will be created with padding widths of at least 2 in the y dimension, making it easier to copy data to and from the C-style arrays using <a class="el" href="classyask_1_1yk__var.html#a87233274749b94a4c847ecc4607ba0cc" title="Copy elements within specified subset of this var into a float buffer.">yk_var::get_elements_in_slice()</a> and <a class="el" href="classyask_1_1yk__var.html#a5c777cd27d09dc1110c5bf87d2084500" title="Set elements within specified subset of the var from values in a float buffer.">yk_var::set_elements_in_slice()</a>.</p>
 <p>The padding size cannot be changed after data storage has been allocated for a given var; attempted changes to the pad size for such vars will be ignored.</p>
 <p>Use <a class="el" href="classyask_1_1yk__var.html#a370adca271068bd8952bbe9d1696a78a" title="[Advanced] Set the minimum left padding in the specified dimension.">yk_var::set_left_min_pad_size</a> and <a class="el" href="classyask_1_1yk__var.html#a02ee27a0c922e55def701d6efffc725c" title="[Advanced] Set the minimum right padding in the specified dimension.">yk_var::set_right_min_pad_size()</a> for individual setting of each var. Call <a class="el" href="classyask_1_1yk__var.html#a2a6b515ee0073b8ff35fb8bee47de00e" title="Get the actual left padding in the specified dimension.">yk_var::get_left_pad_size()</a> and <a class="el" href="classyask_1_1yk__var.html#a44d13a6f6925574545bd5594cecece43" title="Get the actual right padding in the specified dimension.">yk_var::get_right_pad_size()</a> to determine the actual padding sizes for a given var. See the "Detailed Description" for <a class="el" href="classyask_1_1yk__var.html">yk_var</a> for more information on var sizes. Padding is only allowed in the domain dimensions. </p>
 <dl class="params"><dt>Parameters</dt><dd>

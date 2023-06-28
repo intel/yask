@@ -398,7 +398,7 @@ namespace yask {
                   strict_indices << " on " <<
                   gb().make_info_string());
         idx_t nup = 0;
-        if (!get_raw_storage_buffer() && strict_indices)
+        if (!is_storage_allocated())
             THROW_YASK_EXCEPTION("call to 'set_element' with no storage allocated for var '" +
                                  get_name() + "'");
         if (get_raw_storage_buffer() &&
@@ -456,88 +456,69 @@ namespace yask {
     }
 
     // Read into buffer from *this.
+    idx_t YkVarBase::get_elements_in_slice(double* buffer_ptr,
+                                           size_t buffer_size,
+                                           const Indices& first_indices,
+                                           const Indices& last_indices,
+                                           bool on_device) const {
+        return _get_elements_in_slice(buffer_ptr, buffer_size,
+                                      first_indices, last_indices,
+                                      on_device);
+    }
+    idx_t YkVarBase::get_elements_in_slice(float* buffer_ptr,
+                                           size_t buffer_size,
+                                           const Indices& first_indices,
+                                           const Indices& last_indices,
+                                           bool on_device) const {
+        return _get_elements_in_slice(buffer_ptr, buffer_size,
+                                      first_indices, last_indices,
+                                      on_device);
+    }
     idx_t YkVarBase::get_elements_in_slice(void* buffer_ptr,
                                            const Indices& first_indices,
                                            const Indices& last_indices,
                                            bool on_device) const {
-        // A specialized visitor.
-        struct GetElem {
-            static const char* fname() {
-                return "get_elements_in_slice";
-            }
-
-            // Copy from the var to the buffer.
-            ALWAYS_INLINE
-            static void visit(YkVarBase* varp,
-                              real_t* p, idx_t pofs,
-                              const Indices& pt, idx_t ti) {
-
-                // Read from var.
-                real_t val = varp->read_elem(pt, ti, __LINE__);
-
-                // Write to buffer at proper index.
-                p[pofs] = val;
-            }
-        };
-
-        if (on_device)
-            const_copy_data_to_device();
+        if (REAL_BYTES == 8)
+            return _get_elements_in_slice((double*)buffer_ptr, IDX_MAX,
+                                          first_indices, last_indices,
+                                          on_device);
         else
-            const_copy_data_from_device();
-        
-        // Call the generic visit.
-        auto n = const_cast<YkVarBase*>(this)->
-            _visit_elements_in_slice<GetElem>(true, (void*)buffer_ptr,
-                                              first_indices, last_indices, on_device);
-
-        // Return number of writes.
-        return n;
+            return _get_elements_in_slice((float*)buffer_ptr, IDX_MAX,
+                                          first_indices, last_indices,
+                                          on_device);
     }
 
     // Write to *this from buffer.
+    idx_t YkVarBase::set_elements_in_slice(const double* buffer_ptr,
+                                           size_t buffer_size,
+                                           const Indices& first_indices,
+                                           const Indices& last_indices,
+                                           bool on_device) {
+        return _set_elements_in_slice(buffer_ptr, buffer_size,
+                                      first_indices, last_indices,
+                                      on_device);
+    }
+    idx_t YkVarBase::set_elements_in_slice(const float* buffer_ptr,
+                                           size_t buffer_size,
+                                           const Indices& first_indices,
+                                           const Indices& last_indices,
+                                           bool on_device) {
+        return _set_elements_in_slice(buffer_ptr, buffer_size,
+                                      first_indices, last_indices,
+                                      on_device);
+    }
     idx_t YkVarBase::set_elements_in_slice(const void* buffer_ptr,
                                            const Indices& first_indices,
                                            const Indices& last_indices,
                                            bool on_device) {
-        // A specialized visitor.
-        struct SetElem {
-            static const char* fname() {
-                return "set_elements_in_slice";
-            }
-
-            // Copy from the buffer to the var.
-            ALWAYS_INLINE
-            static void visit(YkVarBase* varp,
-                              real_t* p, idx_t pofs,
-                              const Indices& pt, idx_t ti) {
-
-                // Read from buffer.
-                real_t val = p[pofs];
-
-                // Write to var
-                varp->write_elem(val, pt, ti, __LINE__);
-            }
-        };
-
-        if (on_device)
-            const_copy_data_to_device();
+        if (REAL_BYTES == 8)
+            return _set_elements_in_slice((double*)buffer_ptr, IDX_MAX,
+                                          first_indices, last_indices,
+                                          on_device);
         else
-            const_copy_data_from_device();
-        
-        // Call the generic visit.
-        auto n = 
-            _visit_elements_in_slice<SetElem>(true, (void*)buffer_ptr,
-                                              first_indices, last_indices, on_device);
-            
-        // Set appropriate dirty flags.
-        if (on_device)
-            _coh.mod_dev();
-        else
-            _coh.mod_host();
-        set_dirty_in_slice(first_indices, last_indices);
-
-        // Return number of writes.
-        return n;
+            return _set_elements_in_slice((float*)buffer_ptr, IDX_MAX,
+                                          first_indices, last_indices,
+                                          on_device);
     }
 
     // Write to *this from 'val'.
@@ -578,8 +559,10 @@ namespace yask {
         
         // Call the generic visit.
         auto n = 
-            _visit_elements_in_slice<SetElem>(strict_indices, (void*)buffer_ptr,
-                                              first_indices, last_indices, on_device);
+            _visit_elements_in_slice<SetElem>(strict_indices,
+                                              buffer_ptr, IDX_MAX,
+                                              first_indices, last_indices,
+                                              on_device);
             
         // Set appropriate dirty flags.
         if (on_device)
