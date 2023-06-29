@@ -288,6 +288,10 @@ namespace yask {
         virtual void
         finalize() =0;
 
+        /// Finalize the environment and exit.
+        YASK_NORETURN virtual void
+        exit(int code) =0;
+
     }; // yk_env.
 
     /// **[Deprecated]** Use yk_var.

@@ -29,23 +29,6 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    // Fatal error.
-    [[noreturn]] inline
-    void exit_yask(int code) {
-
-#ifdef USE_MPI
-        int flag;
-        MPI_Initialized(&flag);
-        if (flag) {
-            int num_ranks = 1;
-            MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
-            if (num_ranks > 1)
-                MPI_Abort(MPI_COMM_WORLD, code);
-        }
-#endif
-        exit(code);
-    }
-
     // Get an int from an env var.
     inline int get_env_int(const std::string& name, int def) {
         int res = def;

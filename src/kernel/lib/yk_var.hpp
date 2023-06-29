@@ -1052,12 +1052,17 @@ namespace yask {
             if (ndims_left == 0)
                 assert(tsz == 1);
             
-            // Iterate through inner index in inner loop.
-            // This enables more optimization.
-            const auto ip = get_num_dims() - 1;
-            idx_t ni = ndims_left ? range[ip] : 1;
-            if (ndims_left)
-                range[ip] = 1; // Do whole range in each iter.
+            // Iterate through inner index in inner loop if there is enough
+            // work to do.  This enables more optimization.
+            idx_t ni = 1;       // Inner iterations.
+            const auto ip = get_num_dims() - 1; // Inner index.
+            if (ndims_left) {
+                idx_t osz = tsz / range[ip]; // Work in non-inner indices.
+                if (osz >= yask_get_num_threads()) {
+                    ni = range[ip]; // Do whole range in each iter.
+                    range[ip] = 1;  // Visit this dim only once.
+                }
+            }
             TRACE_MSG(Visitor::fname() << ": " << ni <<
                       " element(s) for each starting-point in shape " <<
                       make_index_string(range) << " for each inner loop");
@@ -1093,6 +1098,8 @@ namespace yask {
                              
                                  // Call visitor.
                                  Visitor::visit(this, buffer_ptr, bofs, pt, ti);
+
+                                 // Advance to next point.
                                  if (ndims_left)
                                      pt[ip]++;
                              }

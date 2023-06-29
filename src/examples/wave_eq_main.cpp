@@ -74,103 +74,147 @@ int main(int argc, char** argv) {
     int rank_num = -1;
     try {
 
-        // The factory from which all other kernel objects are made.
+        // YASK factories that make other YASK objects.
         yk_factory kfac;
+        yask_output_factory ofac;
 
         // Initalize MPI, etc.
         auto env = kfac.new_env();
         rank_num = env->get_rank_index();
 
-        // parse command line options
+        // Command-line options
+        bool help = false;          // help requested.
+        bool do_debug = false;
+        bool do_trace = false;
+        int msg_rank = 0;              // rank to print debug msgs.
         bool benchmark_mode = false;
-        idx_t grid_size = 128;
-        int i = 0;
-        while (i < argc) {
-            if (string(argv[i]) == "-t") {
-                benchmark_mode = true;
-            }
-            if (string(argv[i]) == "-n") {
-                i++;
-                grid_size = atoi(argv[i]);
-            }
-            i++;
+
+        // Parser for app options.
+        command_line_parser parser;
+        parser.add_option(make_shared<command_line_parser::bool_option>
+                          ("help",
+                           "Print help message.",
+                           help));
+        parser.add_option(make_shared<command_line_parser::int_option>
+                          ("msg_rank",
+                           "Index of MPI rank that will print messages.",
+                           msg_rank));
+        parser.add_option(make_shared<command_line_parser::bool_option>
+                          ("yask_debug",
+                           "Print informational messages from YASK library to 'msg_rank' rank.",
+                           do_debug));
+        parser.add_option(make_shared<command_line_parser::bool_option>
+                          ("yask_trace",
+                           "Print internal tracing messages to 'msg_rank' rank if "
+                           "YASK libary compiled with tracing enabled.",
+                           do_trace));
+        parser.add_option(make_shared<command_line_parser::bool_option>
+                          ("bench",
+                           "Run in peformance-measurement mode instead of validation mode.",
+                           benchmark_mode));
+
+        // Parse 'args' and 'argv' cmd-line options, which sets option values.
+        // Any remaining strings will be returned.
+        auto rem_args = parser.parse_args(argc, argv);
+        string pgm_name = argv[0];
+
+        // Enable output only on requested rank.
+        if (do_trace) {
+            do_debug = true;
+            yk_env::set_trace_enabled(true);
         }
-
-        cout << "Number of MPI ranks: " << env->get_num_ranks() << endl;
-
-        yk_env::disable_debug_output();
-        //yk_env::set_trace_enabled(true);
-
+        if (msg_rank != rank_num || !do_debug)
+            yk_env::disable_debug_output(); // no YASK lib output.
+        auto nullos = ofac.new_null_output();
+        ostream& os = (msg_rank == rank_num) ? cout :
+            nullos->get_ostream();
+        
         // Create solution.
         auto soln = kfac.new_solution(env);
 
-        // Set default domain and block sizes.
-        soln->set_overall_domain_size("x", grid_size+1);
-        soln->set_overall_domain_size("y", grid_size+1);
-        soln->set_block_size("x", 72);
-        soln->set_block_size("y", 72);
-        
+        // Set default sizes.
+        if (benchmark_mode)
+            soln->set_overall_domain_size_vec({ 2048, 2048 });
+        else
+            soln->set_overall_domain_size_vec({ 160, 160 });
+        soln->set_block_size_vec({ 72, 72 });
+
+        // Print help and exit if requested.  This is done after the
+        // defaults are set so that the defaults will be shown in the help
+        // message.
+        if (help) {
+            os << "Usage: " << pgm_name << " [options]\n"
+                "Options from the '" << pgm_name << "' binary:\n";
+            parser.print_help(os);
+            os << "Options from the YASK library:\n" <<
+                soln->get_command_line_help();
+            env->exit(1);
+        }
+
         // Apply any YASK command-line options.
         // These may override the defaults set above.
-        soln->apply_command_line_options(argc, argv);
-
-        cout << "YASK solution: " << soln->get_name() << endl;
+        // Parse standard args from YASK library.
+        rem_args = soln->apply_command_line_options(rem_args);
+        if (rem_args.length())
+            THROW_YASK_EXCEPTION("extraneous parameter(s): '" +
+                                 rem_args +
+                                 "'; run with '-help' option for usage");
+        
+        os << "Number of MPI ranks: " << env->get_num_ranks() << endl;
+        os << "YASK solution: " << soln->get_name() << endl;
         assert(soln->get_name() == "wave2d");
-        cout << "precision: " << soln->get_element_bytes() << " bytes" << endl;
-        assert(soln->get_element_bytes() == 8);
-        cout << "num threads: " << (soln->get_num_outer_threads() * soln->get_num_inner_threads()) << endl;
-        cout << "block size: " << soln->get_block_size("x") << " x " << soln->get_block_size("y") << endl << flush;
+        os << "Precision: " << soln->get_element_bytes() << " bytes" << endl;
+        assert(soln->get_element_bytes() == sizeof(double));
+        os << "Num threads: " << (soln->get_num_outer_threads() * soln->get_num_inner_threads()) << endl;
+        os << "Block size: " << soln->get_block_size("x") << " * " << soln->get_block_size("y") << endl << flush;
 
         // Get access to YASK vars from kernel.
         auto e = soln->get_var("e");
         auto u = soln->get_var("u");
         auto v = soln->get_var("v");
 
-        // Make additional YASK vars.
-        // x and y coordinates in the cell center (T points).
-        // NOTE the last element is not used; last valid element is grid_size-1.
-        auto x = soln->new_var("x", {"x"});
-        auto y = soln->new_var("y", {"y"});
-        
-        // Allocate memory for any vars that do not have storage set.
-        // Set other data structures needed for stencil application.
+        // Allocate var memory, MPI buffers, etc.
         soln->prepare_solution();
 
-        // YASK domains.
+        // Computational global domain (one less than YASK domain) and domain
+        // coordinates.
+        idx_t nx = soln->get_overall_domain_size("x") - 1;
+        double x_min = -1.0;
+        double x_max = 1.0;
+        double lx = x_max - x_min;
+        double dx = lx/nx;
+        double inv_dx = double(nx) / lx;
+        idx_t ny = soln->get_overall_domain_size("y") - 1;
+        double y_min = -1.0;
+        double y_max = 1.0;
+        double ly = y_max - y_min;
+        double dy = ly/ny;
+        double inv_dy = double(ny) / ly;
+
+        os << "Global grid size for wave eq: " << nx << " * " << ny << endl;
+        os << "Elevation DOFs: " << nx*ny << endl;
+        os << "Velocity  DOFs: " << (nx+1)*ny + nx*(ny+1) << endl;
+        os << "Total     DOFs: " << nx*ny + (nx+1)*ny + nx*(ny+1) << endl;
+
+        // Functions to return domain positions at each local grid index.
+        auto xpos =
+            [=](idx_t xi) {
+                return x_min + dx/2 + xi * dx;
+            };
+        auto ypos =
+            [=](idx_t yi) {
+                return y_min + dy/2 + yi * dy;
+            };
+
+        // YASK local domain.
         auto firstx = soln->get_first_rank_domain_index("x");
         auto lastx = soln->get_last_rank_domain_index("x");
         auto xsz = lastx - firstx + 1; // number of cells in YASK domain.
         auto firsty = soln->get_first_rank_domain_index("y");
         auto lasty = soln->get_last_rank_domain_index("y");
         auto ysz = lasty - firsty + 1; // number of cells in YASK domain.
-        cout << "YASK local domain size: " << xsz << " x " << ysz << endl;
 
-        // Define domain coordinates at cell centers
-        idx_t nx = grid_size;  // number of cells
-        double x_min = -1.0;
-        double x_max = 1.0;
-        double lx = x_max - x_min;
-        double dx = lx/nx;
-        idx_t ny = grid_size;  // number of cells
-        double y_min = -1.0;
-        double y_max = 1.0;
-        double ly = y_max - y_min;
-        double dy = ly/ny;
-
-        for (idx_t i = firstx; i <= lastx; i++) {
-            double xi = x_min + dx/2 + i * dx;  // cell center
-            x->set_element(xi, {i});
-        }
-        for (idx_t j = firsty; j <= lasty; j++) {
-            double yj = y_min + dy/2 + j * dy;  // cell center
-            y->set_element(yj, {j});
-        }
-
-        cout << "Grid size: " << nx << " x " << ny << endl;
-        cout << "Elevation DOFs: " << nx*ny << endl;
-        cout << "Velocity  DOFs: " << (nx+1)*ny + nx*(ny+1) << endl;
-        cout << "Total     DOFs: " << nx*ny + (nx+1)*ny + nx*(ny+1);
-        cout << endl;
+        os << "YASK local domain size: " << xsz << " x " << ysz << endl;
 
         // compute time step
         double t_end = 1.0;
@@ -179,80 +223,105 @@ int main(int argc, char** argv) {
         double c = sqrt(g*h);
         double alpha = 0.5;
         double dt = alpha * dx / c;
-        dt = t_export / static_cast<int>(ceil(t_export / dt));
-        idx_t nt = static_cast<int>(ceil(t_end / dt));
+        dt = t_export / ceil(t_export / dt);
+        idx_t nt = ceil(t_end / dt);
         if (benchmark_mode) {
             nt = 100;
             dt = 1e-5;
             t_export = 25*dt;
             t_end = nt*dt;
         }
-        cout << "Time step: " << (dt * 1e3) << " ms" << endl;
-        cout << "Total simulation time: " << fixed << setprecision(1);
-        cout << (t_end * 1e3) << " ms, ";
-        cout << nt << " time steps" << endl;
 
-        auto dx_var = soln->get_var("dx");
-        auto dy_var = soln->get_var("dy");
-        auto dt_var = soln->get_var("dt");
-        dx_var->set_element(dx, {});
-        dy_var->set_element(dy, {});
-        dt_var->set_element(dt, {});
-
+        // Set YASK scalars.
+        soln->get_var("inv_dx")->set_element(inv_dx, {});
+        soln->get_var("inv_dy")->set_element(inv_dy, {});
+        soln->get_var("dt")->set_element(dt, {});
         soln->get_var("g")->set_element(g, {});
         soln->get_var("depth")->set_element(h, {});
 
-        // Some 1D buffers used to copy slices of data to/from YASK vars.
-        double bufs[2][ysz];
+        // Some buffers used to copy slices of data to/from YASK vars.
+        constexpr idx_t xbsz = 256; // buf size in x dim.
+        const idx_t ybsz = ysz - 1; // buf size in y dim.
+        double ebuf[xbsz][ybsz], ubuf[xbsz][ybsz];
+        const idx_t xybsz = xbsz * ybsz;
         
         // Init vars.
         e->set_all_elements_same(0.0);
         u->set_all_elements_same(0.0);
         v->set_all_elements_same(0.0);
 
-        // Set elevation by slices.
-        for (idx_t i = firstx; i <= lastx-1; i++) {
-            double xi = x->get_element({i});
-            for (idx_t j = 0; j < ysz-1; j++) {
-                double yj = y->get_element({j + firsty});
-                double val = initial_elev(xi, yj, lx, ly);
-                bufs[0][j] = val;
+        // Set initial elevation by slices.
+        for (idx_t firstbx = firstx; firstbx <= lastx - 1; firstbx += xbsz) {
+            idx_t lastbx = min(lastx - 1, firstbx + xbsz - 1);
+            assert(lastbx >= firstbx);
+            idx_t nbx = lastbx - firstbx + 1;
+            assert(nbx <= xbsz);
+            idx_t nbxy = nbx * ybsz;
+            assert(nbxy <= xybsz);
+
+            for (idx_t i = 0; i < nbx; i++) {
+                idx_t xi = i + firstbx;
+                
+                #pragma omp simd
+                for (idx_t j = 0; j < ybsz; j++) {
+                    idx_t yj = j + firsty;
+                    double val = initial_elev(xpos(xi), ypos(yj), lx, ly);
+                    ebuf[i][j] = val;
+                }
             }
-            e->set_elements_in_slice(bufs[0], ysz, { 0, i, firsty }, { 0, i, lasty-1 });
+            auto n = e->set_elements_in_slice(ebuf[0], xybsz,
+                                              { 0, firstbx, firsty },
+                                              { 0, lastbx, lasty-1 });
+            assert(n == nbxy);
         }
 
         // Apply the stencil solution to the data.
         soln->reset_auto_tuner(false);
         env->global_barrier();
 
+        os << "Time step: " << (dt * 1e3) << " ms" << endl;
+        os << "Total simulation time: " << fixed << setprecision(1);
+        os << (t_end * 1e3) << " ms, ";
+        os << nt << " time steps" << endl;
         double initial_v = 0;
         idx_t i_export = 0;
         double t = 0.0;
 
+        os << flush;
+        sleep(1);
+
         // Main simulation loop.
-        auto tic = std::chrono::steady_clock::now();
+        auto tic = chrono::steady_clock::now();
         for (idx_t ti = 0; ti < nt+1; ) {
             t = ti * dt;
 
             // Get stats from YASK vars by slices.
             double e_sum = 0.0, e_max = 0.0, u_max = 0.0;
-            for (idx_t i = firstx; i <= lastx-1; i++) {
-                for (idx_t j = 0; j < ysz-1; j++)
-                    bufs[1][j] = 99.;
-                auto n = e->get_elements_in_slice(bufs[0], ysz, { ti, i, firsty }, { ti, i, lasty });
-                assert(n == ysz);
-                n = u->get_elements_in_slice(bufs[1], ysz, { ti, i, firsty }, { ti, i, lasty });
-                assert(n == ysz);
+            for (idx_t firstbx = firstx; firstbx <= lastx - 1; firstbx += xbsz) {
+                idx_t lastbx = min(lastx - 1, firstbx + xbsz - 1);
+                idx_t nbx = lastbx - firstbx + 1;
+                idx_t nbxy = nbx * ybsz;
 
-                #pragma omp simd
-                for (idx_t j = 0; j < ysz-1; j++) {
-                    auto eval = bufs[0][j];
-                    auto uval = bufs[1][j];
-                    //cout << " ** u[" << i << "," << j << "] = " << uval <<
-                    //", " << u->get_element({ ti, i, j}) << endl;
-                    e_sum += eval;
-                    e_max = std::max(e_max, eval);
-                    u_max = std::max(u_max, uval);
+                auto n = e->get_elements_in_slice(ebuf[0], xybsz,
+                                                  { ti, firstbx, firsty },
+                                                  { ti, lastbx, lasty-1 });
+                assert(n == nbxy);
+                n = u->get_elements_in_slice(ubuf[0], xybsz,
+                                             { ti, firstbx, firsty },
+                                             { ti, lastbx, lasty-1 });
+                assert(n == nbxy);
+            
+                for (idx_t i = 0; i < nbx; i++) {
+                
+                    #pragma omp simd
+                    for (idx_t j = 0; j < ybsz; j++) {
+
+                        double eval = ebuf[i][j];
+                        double uval = ubuf[i][j];
+                        e_sum += eval;
+                        e_max = max(e_max, eval);
+                        u_max = max(u_max, uval);
+                    }
                 }
             }
 
@@ -262,15 +331,15 @@ int main(int argc, char** argv) {
                 initial_v = total_v;
             double diff_v = total_v - initial_v;
 
-            printf("%2lu %4u %.3f ", i_export, i, t);
-            printf("elev=%7.5f ", e_max);
-            printf("u=%7.5f ", u_max);
-            printf("dV=% 6.3e ", diff_v);
-            printf("\n");
+            os << setprecision(4) <<
+                i_export << '\t' << ti << '\t' << t <<
+                "\telev=" << e_max <<
+                "\tu=" << u_max <<
+                "\tdV=" << diff_v << endl;
 
             if (e_max > 1e3) {
-                std::cout << "Invalid elevation value: " << e_max;
-                std::cout << std::endl;
+                os << "Invalid elevation value: " << e_max;
+                os << endl;
                 return 1;
             }
             i_export += 1;
@@ -282,41 +351,60 @@ int main(int argc, char** argv) {
             soln->run_solution(ti, ti_end);
             ti = ti_end + 1;
         }
-        auto toc = std::chrono::steady_clock::now();
-        std::chrono::duration<double> duration = toc - tic;
-        std::cout << "Duration: " << std::setprecision(2) << duration.count() <<
-            " s" << std::endl <<
-            "Rate: " << (1e3 * duration.count() / (nt+1)) << " ms/step" << std::endl;
+        auto toc = chrono::steady_clock::now();
 
-        // Compute error against exact solution
+        chrono::duration<double> duration = toc - tic;
+        auto ystats = soln->get_stats();
+        os << "Duration (s): " << setprecision(2) << duration.count() << endl <<
+            "Rate (ms/step): " << (1e3 * duration.count() / (nt+1)) << endl <<
+            "Time in YASK kernel (s): " << ystats->get_elapsed_secs() << endl;
+        os << flush;
+        sleep(1);
+
+        // Compute error against exact solution.
         double err_L2 = 0.0;
-        y->get_elements_in_slice(bufs[0], ysz, { firsty }, { lasty });
-        for (idx_t i = firstx; i <= lastx-1; i++) {
-            double xi = x->get_element({i});
-            e->get_elements_in_slice(bufs[1], ysz, { nt+1, i, firsty }, { nt+1, i, lasty });
-            for (idx_t j = 0; j <= ysz-1; j++) {
-                double yi = bufs[0][j];
-                double elev_exact = exact_elev(xi, yi, t, lx, ly);
-                double elev = bufs[1][j]; // e->get_element({nt+1, i, j});
-                double err = abs(elev - elev_exact);
-                err_L2 += (err * err) * dx * dy / lx / ly;
+        for (idx_t firstbx = firstx; firstbx <= lastx - 1; firstbx += xbsz) {
+            idx_t lastbx = min(lastx - 1, firstbx + xbsz - 1);
+            assert(lastbx >= firstbx);
+            idx_t nbx = lastbx - firstbx + 1;
+            assert(nbx <= xbsz);
+            idx_t nbxy = nbx * ybsz;
+            assert(nbxy <= xybsz);
+
+            auto n = e->get_elements_in_slice(ebuf[0], xybsz,
+                                              { nt+1, firstbx, firsty },
+                                              { nt+1, lastbx, lasty-1 });
+            assert(n == nbxy);
+            
+            for (idx_t i = 0; i < nbx; i++) {
+                idx_t xi = i + firstbx;
+                
+                #pragma omp simd
+                for (idx_t j = 0; j < ybsz; j++) {
+                    idx_t yj = j + firsty;
+
+                    double elev_exact = exact_elev(xpos(xi), ypos(yj), t, lx, ly);
+                    double elev = ebuf[i][j];
+                    double err = abs(elev - elev_exact);
+                    err_L2 += (err * err) * dx * dy / lx / ly;
+                }
             }
         }
         
-        err_L2 = std::sqrt(err_L2);
-        std::cout << "L2 error: " << std::setw(7) << std::scientific;
-        std::cout << std::setprecision(5) << err_L2 << std::endl;
+        err_L2 = sqrt(err_L2);
+        os << "L2 error: " << setw(7) << scientific;
+        os << setprecision(5) << err_L2 << endl;
 
         if (!benchmark_mode) {
             if (nx < 128 || ny < 128) {
-                std::cout << "Skipping correctness test due to small problem size." << std::endl;
+                os << "Skipping correctness test due to small problem size." << endl;
             } else {
                 double tolerance = 1e-2;
                 if (err_L2 > tolerance) {
-                    std::cout << "ERROR: L2 error exceeds tolerance: " << err_L2 << " > " << tolerance << std::endl;
+                    os << "ERROR: L2 error exceeds tolerance: " << err_L2 << " > " << tolerance << endl;
                     return 1;
                 } else {
-                    std::cout << "SUCCESS" << std::endl;
+                    os << "SUCCESS" << endl;
                 }
             }
         }
