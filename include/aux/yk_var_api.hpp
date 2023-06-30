@@ -816,18 +816,16 @@ namespace yask {
            var declaration.
            Indices are relative to the *overall* problem domain.
 
-           If storage has not been allocated for this var, this will have no effect
-           and return zero (0) if `strict_indices` is `false`.
-
            @note The parameter is a double-precision floating-point value, but
            it will be converted to single-precision if this is a single-precision solution.
 
            @returns Number of elements set.
 
+           @throws yask_exception if storage has not been allocated.
+
            @throws yask_exception if `strict_indices` is `true` and any non-step index values
            do not fall between the values returned by
-           get_first_local_index() and get_last_local_index(), inclusive,
-           or storage has not been allocated.
+           get_first_local_index() and get_last_local_index(), inclusive.
         */
         virtual idx_t
         set_elements_in_slice_same(double val /**< [in] All elements in the slice will be set to this. */,
@@ -962,6 +960,109 @@ namespace yask {
                               /**< [in] List of final indices in this (target) var,
                                  one for each var dimension. */ ) =0;
         #endif
+
+        /// Bitmask for sum reduction.
+        static constexpr int yk_sum_reduction_mask = 0x01;
+        
+        /// Bitmask for product reduction.
+        static constexpr int yk_product_reduction_mask = 0x01;
+        
+        /// Bitmask for maximum-value reduction.
+        static constexpr int yk_max_reduction_mask = 0x01;
+        
+        /// Bitmask for minimum-value reduction.
+        static constexpr int yk_min_reduction_mask = 0x01;
+        
+        /// Class returned from reduce_elements_in_slice().
+        /**
+           @note The reduced values are all doubles regardless of the
+           precision of the solution.
+        */
+        class yk_reduction_result {
+        public:
+
+            /// Get the allowed reductions.
+            /**
+               @returns the bitmask of reductions provided.
+            */
+            virtual int
+            get_reduction_mask() const =0;
+
+            /// Get the number of elements reduced.
+            /**
+               @returns the number of elements evaluated.
+            */
+            virtual idx_t
+            get_num_elements_reduced() const =0;
+
+            /// Get sum.
+            /**
+               @returns sum of values of elements in slice or zero (0.0) if
+               no elements were evaluated.
+               @throws yask_exception if sum was not requested.
+            */
+            virtual double
+            get_sum() const =0;
+
+            /// Get product.
+            /**
+               @returns product of values of elements in slice or one (1.0) if
+               no elements were evaluated.
+               @throws yask_exception if product was not requested.
+            */
+            virtual double
+            get_product() const =0;
+
+            /// Get max.
+            /**
+               @returns maximum of values of elements in slice or `MIN_DBL` if
+               no elements were evaluated.
+               @throws yask_exception if max was not requested.
+            */
+            virtual double
+            get_max() const =0;
+
+            /// Get min.
+            /**
+               @returns minimum of values of elements in slice or `MAX_DBL` if
+               no elements were evaluated.
+               @throws yask_exception if sum was not requested.
+            */
+            virtual double
+            get_min() const =0;
+        };
+
+        /// Shared pointer to \ref yk_reduction_result.
+        typedef std::shared_ptr<yk_reduction_result> yk_reduction_result_ptr;
+        
+        /// Perform requested reductions over elements within specified subset of the var.
+        /**
+           Reduces all elements from `first_indices` to `last_indices` in each dimension.
+           Provide indices in two lists in the same order used during
+           var declaration.
+           Indices are relative to the *overall* problem domain.
+
+           Set `reduction_mask` to the bit-wise OR of individual mask values, e.g.,
+           `yk_var::yk_sum_reduction_mask | yk_var::yk_max_reduction_mask`.
+
+           @returns Shared pointer to reduction result.
+
+           @throws yask_exception if storage has not been allocated.
+
+           @throws yask_exception if `strict_indices` is `true` and any non-step index values
+           do not fall between the values returned by
+           get_first_local_index() and get_last_local_index(), inclusive.
+        */
+        virtual yk_reduction_result_ptr
+        reduce_elements_in_slice(int reduction_mask /**< [in] Bit-wise OR of the desired reduction masks. */,
+                                 const idx_t_vec& first_indices
+                                 /**< [in] List of initial indices, one for each var dimension. */,
+                                 const idx_t_vec& last_indices
+                                 /**< [in] List of final indices, one for each var dimension. */,
+                                 bool strict_indices = true
+                                 /**< [in] If true, indices must be within domain or padding.
+                                    If false, only elements within the allocation of this var
+                                    will be evaluated, and elements outside will be ignored. */ ) =0;
         
         /// Format the indices for human-readable display.
         /**

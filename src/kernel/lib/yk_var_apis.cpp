@@ -537,7 +537,8 @@ namespace yask {
             ALWAYS_INLINE
             static void visit(YkVarBase* varp,
                               real_t* p, idx_t pofs,
-                              const Indices& pt, idx_t ti) {
+                              const Indices& pt, idx_t ti,
+                              int thread) {
 
                 // Get const value, ignoring offset.
                 real_t val = *p;
@@ -574,6 +575,135 @@ namespace yask {
         // Return number of writes.
         return n;
     }
+
+    // Reduction result.
+    class red_res : public yk_var::yk_reduction_result {
+
+    protected:
+        char _pad[CACHELINE_BYTES]; // prevent false sharing.
+
+    public:
+        int _mask = 0;
+        idx_t _nred = 0;
+        double _sum = 0.0;
+        double _prod = 1.0;
+        double _max = DBL_MIN;
+        double _min = DBL_MAX;
+
+        virtual ~red_res() { }
+        
+        /// Get the allowed reductions.
+        int get_reduction_mask() const {
+            return _mask;
+        }
+        
+        /// Get the number of elements reduced.
+        idx_t get_num_elements_reduced() const {
+            return _nred;
+        }
+        
+        /// Get results
+        double get_sum() const {
+            if (_mask & yk_var::yk_sum_reduction_mask)
+                return _sum;
+            THROW_YASK_EXCEPTION("Sum reduction not available");
+        }
+        double get_product() const {
+            if (_mask & yk_var::yk_product_reduction_mask)
+                return _prod;
+            THROW_YASK_EXCEPTION("Product reduction not available");
+        }
+        double get_max() const {
+            if (_mask & yk_var::yk_max_reduction_mask)
+                return _max;
+            THROW_YASK_EXCEPTION("Max reduction not available");
+        }
+        double get_min() const {
+            if (_mask & yk_var::yk_sum_reduction_mask)
+                return _min;
+            THROW_YASK_EXCEPTION("Min reduction not available");
+        }
+    };
+    
+    // Perform reduction(s).
+    yk_var::yk_reduction_result_ptr
+    YkVarBase::reduce_elements_in_slice(int reduction_mask,
+                                        const Indices& first_indices,
+                                        const Indices& last_indices,
+                                        bool strict_indices,
+                                        bool on_device) const {
+        // A specialized visitor.
+        struct RedElem {
+            static const char* fname() {
+                return "reduce_elements_in_slice";
+            }
+
+            // Do the reduction(s).
+            ALWAYS_INLINE
+            static void visit(YkVarBase* varp,
+                              real_t* p, idx_t pofs,
+                              const Indices& pt, idx_t ti,
+                              int thread) {
+
+                // Get value, converting to double if needed.
+                double val = varp->read_elem(pt, ti, __LINE__);
+
+                // Use p as a pointer to the result for this thread.
+                // TODO: clean up this hack.
+                red_res* resa = (red_res*)p;
+                assert(thread < yask_get_num_threads());
+                red_res* resp = resa + thread;
+
+                // Do desired reduction(s).
+                int mask = resp->_mask;
+                if (mask & yk_var::yk_sum_reduction_mask)
+                    resp->_sum += val;
+                if (mask & yk_var::yk_product_reduction_mask)
+                    resp->_prod *= val;
+                if (mask & yk_var::yk_max_reduction_mask)
+                    resp->_max = max(resp->_max, val);
+                if (mask & yk_var::yk_min_reduction_mask)
+                    resp->_min = min(resp->_min, val);
+            }
+        };
+
+        if (on_device)
+            const_copy_data_to_device();
+        else
+            const_copy_data_from_device();
+
+        // Make array of results, one for each thread,
+        // so we don't have to use atomics or critical sections.
+        int nthr = yask_get_num_threads();
+        red_res resa[nthr];
+        for (int i = 0; i < nthr; i++)
+            resa[i]._mask = reduction_mask;
+        
+        // Call the generic visit.
+        // TODO: clean up ptr cast.
+        auto n = const_cast<YkVarBase*>(this)->
+            _visit_elements_in_slice<RedElem>(strict_indices,
+                                              (real_t*)resa, IDX_MAX,
+                                              first_indices, last_indices,
+                                              on_device);
+
+        // Make final result.
+        auto resp = make_shared<red_res>();
+        resp->_mask = reduction_mask;
+        resp->_nred = n;
+
+        // Join per-thread results.
+        for (int i = 0; i < nthr; i++) {
+            auto* p = resp.get();
+            p->_sum += resa[i]._sum;
+            p->_prod *= resa[i]._prod;
+            p->_max = max(p->_max, resa[i]._max);
+            p->_min = min(p->_min, resa[i]._min);
+        }
+
+        return resp;
+    }
+    
     
 } // namespace.
 

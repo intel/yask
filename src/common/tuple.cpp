@@ -398,7 +398,7 @@ namespace yask {
                 combos.add_dim_back(dname, sz);
             }
             combos.visit_all_points
-                ([&](const Tuple& combo, size_t idx)->bool {
+                ([&](const Tuple& combo, size_t idx, int thread)->bool {
 
                      // Make candidate tuple w/factors at given indices.
                      auto can = combo.map_elements([&](T in) {

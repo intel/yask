@@ -72,6 +72,7 @@ double initial_elev(double x, double y, double lx, double ly) {
 int main(int argc, char** argv) {
 
     int rank_num = -1;
+    yk_env_ptr env;
     try {
 
         // YASK factories that make other YASK objects.
@@ -79,7 +80,7 @@ int main(int argc, char** argv) {
         yask_output_factory ofac;
 
         // Initalize MPI, etc.
-        auto env = kfac.new_env();
+        env = kfac.new_env();
         rank_num = env->get_rank_index();
 
         // Command-line options
@@ -239,10 +240,10 @@ int main(int argc, char** argv) {
         soln->get_var("g")->set_element(g, {});
         soln->get_var("depth")->set_element(h, {});
 
-        // Some buffers used to copy slices of data to/from YASK vars.
+        // Buffer used to copy slices of data to/from YASK e var.
         constexpr idx_t xbsz = 256; // buf size in x dim.
-        const idx_t ybsz = ysz - 1; // buf size in y dim.
-        double ebuf[xbsz][ybsz], ubuf[xbsz][ybsz];
+        const idx_t ybsz = ysz - 1; // buf size in y dim (entire column).
+        double ebuf[xbsz][ybsz];
         const idx_t xybsz = xbsz * ybsz;
         
         // Init vars.
@@ -252,6 +253,8 @@ int main(int argc, char** argv) {
 
         // Set initial elevation by slices.
         for (idx_t firstbx = firstx; firstbx <= lastx - 1; firstbx += xbsz) {
+
+            // Calc x range for this block.
             idx_t lastbx = min(lastx - 1, firstbx + xbsz - 1);
             assert(lastbx >= firstbx);
             idx_t nbx = lastbx - firstbx + 1;
@@ -279,15 +282,16 @@ int main(int argc, char** argv) {
         soln->reset_auto_tuner(false);
         env->global_barrier();
 
-        os << "Time step: " << (dt * 1e3) << " ms" << endl;
-        os << "Total simulation time: " << fixed << setprecision(1);
-        os << (t_end * 1e3) << " ms, ";
-        os << nt << " time steps" << endl;
+        os << fixed << setprecision(3) <<
+            "Time step (ms): " << (dt * 1e3) << endl <<
+            "Total simulation time (ms): " << (t_end * 1e3) << endl <<
+            "Time steps: " << nt << endl << flush;
         double initial_v = 0;
         idx_t i_export = 0;
         double t = 0.0;
 
-        os << flush;
+        os.unsetf(ios_base::floatfield); // default FP formatting.
+        os << setprecision(4) << left;
         sleep(1);
 
         // Main simulation loop.
@@ -295,52 +299,33 @@ int main(int argc, char** argv) {
         for (idx_t ti = 0; ti < nt+1; ) {
             t = ti * dt;
 
-            // Get stats from YASK vars by slices.
-            double e_sum = 0.0, e_max = 0.0, u_max = 0.0;
-            for (idx_t firstbx = firstx; firstbx <= lastx - 1; firstbx += xbsz) {
-                idx_t lastbx = min(lastx - 1, firstbx + xbsz - 1);
-                idx_t nbx = lastbx - firstbx + 1;
-                idx_t nbxy = nbx * ybsz;
+            // Get YASK var stats for this rank.
+            auto e_red = e->reduce_elements_in_slice(yk_var::yk_sum_reduction_mask |
+                                                     yk_var::yk_max_reduction_mask,
+                                                     { ti, firstx, firsty },
+                                                     { ti, lastx-1, lasty-1 });
+            auto u_red = u->reduce_elements_in_slice(yk_var::yk_max_reduction_mask,
+                                                     { ti, firstx, firsty },
+                                                     { ti, lastx-1, lasty-1 });
+            auto e_sum = e_red->get_sum();
+            auto e_max = e_red->get_max();
+            auto u_max = u_red->get_max();
 
-                auto n = e->get_elements_in_slice(ebuf[0], xybsz,
-                                                  { ti, firstbx, firsty },
-                                                  { ti, lastbx, lasty-1 });
-                assert(n == nbxy);
-                n = u->get_elements_in_slice(ubuf[0], xybsz,
-                                             { ti, firstbx, firsty },
-                                             { ti, lastbx, lasty-1 });
-                assert(n == nbxy);
-            
-                for (idx_t i = 0; i < nbx; i++) {
-                
-                    #pragma omp simd
-                    for (idx_t j = 0; j < ybsz; j++) {
-
-                        double eval = ebuf[i][j];
-                        double uval = ubuf[i][j];
-                        e_sum += eval;
-                        e_max = max(e_max, eval);
-                        u_max = max(u_max, uval);
-                    }
-                }
-            }
-
-            // Compute and export stats.
+            // Compute and export stats for this rank.
             double total_v = (e_sum + h) * dx * dy;
             if (ti==0)
                 initial_v = total_v;
             double diff_v = total_v - initial_v;
 
-            os << setprecision(4) <<
-                i_export << '\t' << ti << '\t' << t <<
-                "\telev=" << e_max <<
-                "\tu=" << u_max <<
-                "\tdV=" << diff_v << endl;
+            os << i_export << '\t' << ti << '\t' << t <<
+                "\telev=" << setw(8) << e_max << setw(0) <<
+                "\tu=" << setw(8) << u_max << setw(0) <<
+                "\tdV=" << setw(8) << diff_v << setw(0) << endl;
 
             if (e_max > 1e3) {
                 os << "Invalid elevation value: " << e_max;
                 os << endl;
-                return 1;
+                env->exit(1);
             }
             i_export += 1;
             idx_t ti_end = ti + idx_t(ceil(t_export / dt)) - 1;
@@ -353,17 +338,24 @@ int main(int argc, char** argv) {
         }
         auto toc = chrono::steady_clock::now();
 
+        // Report perf stas.
         chrono::duration<double> duration = toc - tic;
+        auto dur = duration.count();
         auto ystats = soln->get_stats();
-        os << "Duration (s): " << setprecision(2) << duration.count() << endl <<
-            "Rate (ms/step): " << (1e3 * duration.count() / (nt+1)) << endl <<
-            "Time in YASK kernel (s): " << ystats->get_elapsed_secs() << endl;
-        os << flush;
+        auto ydur = ystats->get_elapsed_secs();
+        os << fixed << setprecision(2) <<
+            "Duration (s): " << dur << endl <<
+            "Rate (ms/step): " << (1e3 * dur / (nt+1)) << endl <<
+            "Time in YASK kernel (s): " << ydur <<
+            " (" << (100. * ydur / dur) << "%)" << endl <<
+            flush;
         sleep(1);
 
         // Compute error against exact solution.
         double err_L2 = 0.0;
         for (idx_t firstbx = firstx; firstbx <= lastx - 1; firstbx += xbsz) {
+
+            // Calc x range for this block.
             idx_t lastbx = min(lastx - 1, firstbx + xbsz - 1);
             assert(lastbx >= firstbx);
             idx_t nbx = lastbx - firstbx + 1;
@@ -390,33 +382,44 @@ int main(int argc, char** argv) {
                 }
             }
         }
-        
         err_L2 = sqrt(err_L2);
-        os << "L2 error: " << setw(7) << scientific;
-        os << setprecision(5) << err_L2 << endl;
 
-        if (!benchmark_mode) {
-            if (nx < 128 || ny < 128) {
-                os << "Skipping correctness test due to small problem size." << endl;
-            } else {
-                double tolerance = 1e-2;
-                if (err_L2 > tolerance) {
-                    os << "ERROR: L2 error exceeds tolerance: " << err_L2 << " > " << tolerance << endl;
-                    return 1;
-                } else {
-                    os << "SUCCESS" << endl;
+        // Trick to emulate MPI critical section.
+        bool ok = true;
+        for (int r = 0; r < env->get_num_ranks(); r++) {
+            env->global_barrier();
+            if (r == rank_num) {
+
+                cout << "Rank: " << r << endl <<
+                    setw(7) << scientific << setprecision(5) <<
+                    "  L2 error: " << err_L2 << endl;
+
+                if (!benchmark_mode) {
+                    if (nx < 128 || ny < 128) {
+                        cout << "  Skipping correctness test due to small problem size." << endl;
+                    } else {
+                        double tolerance = 1e-2;
+                        if (err_L2 > tolerance) {
+                            cout << "  ERROR: L2 error exceeds tolerance: " << err_L2 << " > " << tolerance << endl;
+                            ok = false;
+                        } else {
+                            cout << "  SUCCESS" << endl;
+                        }
+                    }
                 }
+                cout << flush;
             }
         }
 
         soln->end_solution();
-        soln->get_stats();
         env->finalize();
-        return 0;
+        env->exit(ok ? 0 : 1);
     }
     catch (yask_exception e) {
         cerr << "Wave equation: " << e.get_message() <<
             " on rank " << rank_num << ".\n";
-        return 1;
+        if (env)
+            env->exit(1);
+        exit(1);
     }
 }

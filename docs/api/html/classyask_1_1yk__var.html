@@ -75,7 +75,10 @@ $(function() {
 </div><!-- top -->
 <div class="header">
   <div class="summary">
+<a href="#nested-classes">Classes</a> &#124;
+<a href="#pub-types">Public Types</a> &#124;
 <a href="#pub-methods">Public Member Functions</a> &#124;
+<a href="#pub-static-attribs">Static Public Attributes</a> &#124;
 <a href="classyask_1_1yk__var-members.html">List of all members</a>  </div>
   <div class="headertitle"><div class="title">yask::yk_var Class Reference<span class="mlabels"><span class="mlabel">abstract</span></span><div class="ingroups"><a class="el" href="group__yk.html">YASK Kernel</a></div></div></div>
 </div><!--header-->
@@ -86,6 +89,19 @@ $(function() {
 
 <p><code>#include &lt;<a class="el" href="yk__var__api_8hpp_source.html">yk_var_api.hpp</a>&gt;</code></p>
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Classes</h2></td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var_1_1yk__reduction__result.html">yk_reduction_result</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Class returned from <a class="el" href="classyask_1_1yk__var.html#a15d8c95365a80eaa8d011b9017cb1664" title="Perform requested reductions over elements within specified subset of the var.">reduce_elements_in_slice()</a>.  <a href="classyask_1_1yk__var_1_1yk__reduction__result.html#details">More...</a><br /></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-types" name="pub-types"></a>
+Public Types</h2></td></tr>
+<tr class="memitem:ac55c27ecc6287e9c6d3ab84d42825567"><td class="memItemLeft" align="right" valign="top"><a id="ac55c27ecc6287e9c6d3ab84d42825567" name="ac55c27ecc6287e9c6d3ab84d42825567"></a>
+typedef std::shared_ptr&lt; <a class="el" href="classyask_1_1yk__var_1_1yk__reduction__result.html">yk_reduction_result</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><b>yk_reduction_result_ptr</b></td></tr>
+<tr class="memdesc:ac55c27ecc6287e9c6d3ab84d42825567"><td class="mdescLeft">&#160;</td><td class="mdescRight">Shared pointer to <a class="el" href="classyask_1_1yk__var_1_1yk__reduction__result.html">yk_reduction_result</a>. <br /></td></tr>
+<tr class="separator:ac55c27ecc6287e9c6d3ab84d42825567"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
 <tr class="memitem:ab3442919754614fba8d75dcd0229b075"><td class="memItemLeft" align="right" valign="top">virtual const std::string &amp;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#ab3442919754614fba8d75dcd0229b075">get_name</a> () const =0</td></tr>
@@ -226,6 +242,9 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a489b1bdb3d658e454f0ded36f2d966e3"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a489b1bdb3d658e454f0ded36f2d966e3">set_elements_in_slice</a> (const double *buffer_ptr, size_t buffer_size, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;first_indices, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;last_indices)=0</td></tr>
 <tr class="memdesc:a489b1bdb3d658e454f0ded36f2d966e3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set elements within specified subset of the var from values in a <code>double</code> buffer.  <br /></td></tr>
 <tr class="separator:a489b1bdb3d658e454f0ded36f2d966e3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a15d8c95365a80eaa8d011b9017cb1664"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="classyask_1_1yk__var.html#ac55c27ecc6287e9c6d3ab84d42825567">yk_reduction_result_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a15d8c95365a80eaa8d011b9017cb1664">reduce_elements_in_slice</a> (int reduction_mask, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;first_indices, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;last_indices, bool strict_indices=true)=0</td></tr>
+<tr class="memdesc:a15d8c95365a80eaa8d011b9017cb1664"><td class="mdescLeft">&#160;</td><td class="mdescRight">Perform requested reductions over elements within specified subset of the var.  <br /></td></tr>
+<tr class="separator:a15d8c95365a80eaa8d011b9017cb1664"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a55d6c585b8384881065c01bb067c96dd"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a55d6c585b8384881065c01bb067c96dd">format_indices</a> (const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;indices) const =0</td></tr>
 <tr class="memdesc:a55d6c585b8384881065c01bb067c96dd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Format the indices for human-readable display.  <br /></td></tr>
 <tr class="separator:a55d6c585b8384881065c01bb067c96dd"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -309,6 +328,25 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><b>get_last_rank_alloc_index</b> (const std::string &amp;dim) const</td></tr>
 <tr class="memdesc:acb67cbd0ecea35f3f50b435e4b977c53"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__var.html#a7266bb36c93cb6ae538a0f081f22fad7" title="Get the last index in this rank in the specified dimension.">get_last_local_index()</a>. <br /></td></tr>
 <tr class="separator:acb67cbd0ecea35f3f50b435e4b977c53"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
+Static Public Attributes</h2></td></tr>
+<tr class="memitem:ab4f66b6f575d737c942c99510ccabe36"><td class="memItemLeft" align="right" valign="top"><a id="ab4f66b6f575d737c942c99510ccabe36" name="ab4f66b6f575d737c942c99510ccabe36"></a>
+static constexpr int&#160;</td><td class="memItemRight" valign="bottom"><b>yk_sum_reduction_mask</b> = 0x01</td></tr>
+<tr class="memdesc:ab4f66b6f575d737c942c99510ccabe36"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bitmask for sum reduction. <br /></td></tr>
+<tr class="separator:ab4f66b6f575d737c942c99510ccabe36"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa580096ea7894f0ad3fb6a700bd571c4"><td class="memItemLeft" align="right" valign="top"><a id="aa580096ea7894f0ad3fb6a700bd571c4" name="aa580096ea7894f0ad3fb6a700bd571c4"></a>
+static constexpr int&#160;</td><td class="memItemRight" valign="bottom"><b>yk_product_reduction_mask</b> = 0x01</td></tr>
+<tr class="memdesc:aa580096ea7894f0ad3fb6a700bd571c4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bitmask for product reduction. <br /></td></tr>
+<tr class="separator:aa580096ea7894f0ad3fb6a700bd571c4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a547083f1211754439aec19c53182acc5"><td class="memItemLeft" align="right" valign="top"><a id="a547083f1211754439aec19c53182acc5" name="a547083f1211754439aec19c53182acc5"></a>
+static constexpr int&#160;</td><td class="memItemRight" valign="bottom"><b>yk_max_reduction_mask</b> = 0x01</td></tr>
+<tr class="memdesc:a547083f1211754439aec19c53182acc5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bitmask for maximum-value reduction. <br /></td></tr>
+<tr class="separator:a547083f1211754439aec19c53182acc5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4b49b391276ec2aae5d4da4d21c31da0"><td class="memItemLeft" align="right" valign="top"><a id="a4b49b391276ec2aae5d4da4d21c31da0" name="a4b49b391276ec2aae5d4da4d21c31da0"></a>
+static constexpr int&#160;</td><td class="memItemRight" valign="bottom"><b>yk_min_reduction_mask</b> = 0x01</td></tr>
+<tr class="memdesc:a4b49b391276ec2aae5d4da4d21c31da0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Bitmask for minimum-value reduction. <br /></td></tr>
+<tr class="separator:a4b49b391276ec2aae5d4da4d21c31da0"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>A run-time YASK data container. </p>
@@ -2014,12 +2052,12 @@ do not use this API to set many contiguous values; <a class="el" href="classyask
 
 <p>Initialize var elements within specified subset of the var to the same value. </p>
 <p>Sets all elements from <code>first_indices</code> to <code>last_indices</code> in each dimension to the specified value. Provide indices in two lists in the same order used during var declaration. Indices are relative to the <em>overall</em> problem domain.</p>
-<p>If storage has not been allocated for this var, this will have no effect and return zero (0) if <code>strict_indices</code> is <code>false</code>.</p>
 <dl class="section note"><dt>Note</dt><dd>The parameter is a double-precision floating-point value, but it will be converted to single-precision if this is a single-precision solution.</dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>Number of elements set.</dd></dl>
 <dl class="exception"><dt>Exceptions</dt><dd>
   <table class="exception">
-    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if <code>strict_indices</code> is <code>true</code> and any non-step index values do not fall between the values returned by <a class="el" href="classyask_1_1yk__var.html#aaf5b3f06b832bbf77b8f722fda8a2998" title="Get the first valid index in this rank in the specified dimension.">get_first_local_index()</a> and <a class="el" href="classyask_1_1yk__var.html#a7266bb36c93cb6ae538a0f081f22fad7" title="Get the last index in this rank in the specified dimension.">get_last_local_index()</a>, inclusive, or storage has not been allocated. </td></tr>
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if storage has not been allocated.</td></tr>
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if <code>strict_indices</code> is <code>true</code> and any non-step index values do not fall between the values returned by <a class="el" href="classyask_1_1yk__var.html#aaf5b3f06b832bbf77b8f722fda8a2998" title="Get the first valid index in this rank in the specified dimension.">get_first_local_index()</a> and <a class="el" href="classyask_1_1yk__var.html#a7266bb36c93cb6ae538a0f081f22fad7" title="Get the last index in this rank in the specified dimension.">get_last_local_index()</a>, inclusive. </td></tr>
   </table>
   </dd>
 </dl>
@@ -2173,6 +2211,75 @@ do not use this API to set many contiguous values; <a class="el" href="classyask
     <tr><td class="paramdir">[in]</td><td class="paramname">buffer_size</td><td>Number of <code>double</code> elements in <code>buffer_ptr</code> array</td></tr>
     <tr><td class="paramdir">[in]</td><td class="paramname">first_indices</td><td>List of initial indices, one for each var dimension.</td></tr>
     <tr><td class="paramdir">[in]</td><td class="paramname">last_indices</td><td>List of final indices, one for each var dimension. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a15d8c95365a80eaa8d011b9017cb1664" name="a15d8c95365a80eaa8d011b9017cb1664"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a15d8c95365a80eaa8d011b9017cb1664">&#9670;&#160;</a></span>reduce_elements_in_slice()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="classyask_1_1yk__var.html#ac55c27ecc6287e9c6d3ab84d42825567">yk_reduction_result_ptr</a> yask::yk_var::reduce_elements_in_slice </td>
+          <td>(</td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>reduction_mask</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;&#160;</td>
+          <td class="paramname"><em>first_indices</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;&#160;</td>
+          <td class="paramname"><em>last_indices</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool&#160;</td>
+          <td class="paramname"><em>strict_indices</em> = <code>true</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Perform requested reductions over elements within specified subset of the var. </p>
+<p>Reduces all elements from <code>first_indices</code> to <code>last_indices</code> in each dimension. Provide indices in two lists in the same order used during var declaration. Indices are relative to the <em>overall</em> problem domain.</p>
+<p>Set <code>reduction_mask</code> to the bit-wise OR of individual mask values, e.g., <code><a class="el" href="classyask_1_1yk__var.html#ab4f66b6f575d737c942c99510ccabe36" title="Bitmask for sum reduction.">yk_var::yk_sum_reduction_mask</a> | <a class="el" href="classyask_1_1yk__var.html#a547083f1211754439aec19c53182acc5" title="Bitmask for maximum-value reduction.">yk_var::yk_max_reduction_mask</a></code>.</p>
+<dl class="section return"><dt>Returns</dt><dd>Shared pointer to reduction result.</dd></dl>
+<dl class="exception"><dt>Exceptions</dt><dd>
+  <table class="exception">
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if storage has not been allocated.</td></tr>
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if <code>strict_indices</code> is <code>true</code> and any non-step index values do not fall between the values returned by <a class="el" href="classyask_1_1yk__var.html#aaf5b3f06b832bbf77b8f722fda8a2998" title="Get the first valid index in this rank in the specified dimension.">get_first_local_index()</a> and <a class="el" href="classyask_1_1yk__var.html#a7266bb36c93cb6ae538a0f081f22fad7" title="Get the last index in this rank in the specified dimension.">get_last_local_index()</a>, inclusive. </td></tr>
+  </table>
+  </dd>
+</dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">reduction_mask</td><td>Bit-wise OR of the desired reduction masks.</td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">first_indices</td><td>List of initial indices, one for each var dimension.</td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">last_indices</td><td>List of final indices, one for each var dimension.</td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">strict_indices</td><td>If true, indices must be within domain or padding. If false, only elements within the allocation of this var will be evaluated, and elements outside will be ignored. </td></tr>
   </table>
   </dd>
 </dl>

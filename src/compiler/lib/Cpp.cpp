@@ -1053,7 +1053,7 @@ namespace yask {
 
         // Loop through all points in the vector fold.
         get_fold().visit_all_points([&](const IntTuple& vec_point,
-                                        size_t pelem){
+                                        size_t pelem, int thread){
 
                                         // Example: vec_point contains x=0, y=2, z=1, where each val
                                         // is the offset in the given fold dim.  We want to map

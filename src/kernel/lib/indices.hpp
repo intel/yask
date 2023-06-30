@@ -431,7 +431,8 @@ namespace yask {
         // concurrently, and return value from 'visitor' is ignored.
         void visit_all_points_in_parallel(bool first_inner,
                                           std::function<bool (const Indices& idxs,
-                                                              size_t idx)> visitor) const {
+                                                              size_t idx,
+                                                              int thread)> visitor) const {
             // Total number of points to visit.
             idx_t ne = product();
 
@@ -443,7 +444,7 @@ namespace yask {
             else if (ne == 1) {
                 Indices idxs(*this);
                 idxs.set_vals_same(0);
-                visitor(idxs, 0);
+                visitor(idxs, 0, 0);
                 return;
             }
 
@@ -453,8 +454,6 @@ namespace yask {
             idx_t nthr = yask_get_num_threads();
 
             // Start visits in parallel.
-            // (Not guaranteed that each tnum will be unique in every OMP
-            // impl, so don't rely on it.)
             yask_parallel_for
                 (0, nthr, 1,
                  [&](idx_t n, idx_t np1, idx_t tnum) {
@@ -476,7 +475,7 @@ namespace yask {
                      for (idx_t i = start; i < stop; i++) {
                          
                          // Call visitor.
-                         visitor(idxs, i);
+                         visitor(idxs, i, tnum);
                          
                          // Jump to next index.
                          next_index(first_inner, idxs);

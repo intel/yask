@@ -925,6 +925,14 @@ namespace yask {
                                     const Indices& last_indices,
                                     bool on_device) const;
 
+        // Reductions.
+        yk_var::yk_reduction_result_ptr
+        reduce_elements_in_slice(int reduction_mask,
+                                 const Indices& first_indices,
+                                 const Indices& last_indices,
+                                 bool strict_indices,
+                                 bool on_device) const;
+
         // Possibly vectorized version of set/get_elements_in_slice().
         virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
                                         const Indices& first_indices,
@@ -986,7 +994,8 @@ namespace yask {
         //                    real_t* p,  // copy of 'buffer_ptr'.
         //                    idx_t pofs, // offset into buffer.
         //                    const Indices& pt, // point in 'this' var.
-        //                    idx_t ti);  // precomputed step index.
+        //                    idx_t ti,  // precomputed step index.
+        //                    int thread); // thread number.
         template<typename Visitor, typename T>
         idx_t _visit_elements_in_slice(bool strict_indices,
                                        T* buffer_ptr,
@@ -1053,7 +1062,7 @@ namespace yask {
                 assert(tsz == 1);
             
             // Iterate through inner index in inner loop if there is enough
-            // work to do.  This enables more optimization.
+            // work to do.  This may enable more optimization.
             idx_t ni = 1;       // Inner iterations.
             const auto ip = get_num_dims() - 1; // Inner index.
             if (ndims_left) {
@@ -1085,7 +1094,7 @@ namespace yask {
                 if (!on_device) {
                     range.visit_all_points_in_parallel
                         (false,
-                         [&](const Indices& ofs, size_t idx) {
+                         [&](const Indices& ofs, size_t idx, int thread) {
                              auto pt = start_indices.add_elements(ofs);
 
                              // Inner loop.
@@ -1097,7 +1106,7 @@ namespace yask {
                                  #endif
                              
                                  // Call visitor.
-                                 Visitor::visit(this, buffer_ptr, bofs, pt, ti);
+                                 Visitor::visit(this, buffer_ptr, bofs, pt, ti, thread);
 
                                  // Advance to next point.
                                  if (ndims_left)
@@ -1141,7 +1150,8 @@ namespace yask {
                 ALWAYS_INLINE
                 static void visit(YkVarBase* varp,
                                   T* p, idx_t pofs,
-                                  const Indices& pt, idx_t ti) {
+                                  const Indices& pt, idx_t ti,
+                                  int thread) {
 
                     // Read from var.
                     real_t val = varp->read_elem(pt, ti, __LINE__);
@@ -1184,7 +1194,8 @@ namespace yask {
                 ALWAYS_INLINE
                 static void visit(YkVarBase* varp,
                                   T* p, idx_t pofs,
-                                  const Indices& pt, idx_t ti) {
+                                  const Indices& pt, idx_t ti,
+                                  int thread) {
 
                     // Read from buffer, converting type if needed.
                     real_t val = p[pofs];
@@ -1719,7 +1730,7 @@ namespace yask {
                 else {
                 vec_range.visit_all_points_in_parallel
                     (false,
-                     [&](const Indices& ofs, size_t idx) {
+                     [&](const Indices& ofs, size_t idx, int thread) {
 
                          // Init vars for first point.
                          auto pt = firstv.add_elements(ofs);
@@ -2161,6 +2172,25 @@ namespace yask {
             return gb().set_elements_in_slice_same(val,
                                                    first_indices, last_indices,
                                                    strict_indices, on_device);
+        }
+        virtual yk_var::yk_reduction_result_ptr
+        reduce_elements_in_slice(int reduction_mask,
+                                 const Indices& first_indices,
+                                 const Indices& last_indices,
+                                 bool strict_indices,
+                                 bool on_device) {
+            return gb().reduce_elements_in_slice(reduction_mask,
+                                                 first_indices, last_indices,
+                                                 strict_indices, on_device);
+        }
+        virtual yk_var::yk_reduction_result_ptr
+        reduce_elements_in_slice(int reduction_mask,
+                                 const idx_t_vec& first_indices,
+                                 const idx_t_vec& last_indices,
+                                 bool strict_indices) {
+            const Indices first(first_indices);
+            const Indices last(last_indices);
+            return reduce_elements_in_slice(reduction_mask, first, last, strict_indices, false);
         }
         virtual idx_t set_elements_in_slice_same(double val,
                                                  const VarIndices& first_indices,

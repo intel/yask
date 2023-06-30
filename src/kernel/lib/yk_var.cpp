@@ -414,7 +414,7 @@ namespace yask {
         // We use this as a handy way to get offsets,
         // but not all points will be used.
         allocs.visit_all_points_in_parallel
-            ([&](const IdxTuple& pt, size_t idx) {
+            ([&](const IdxTuple& pt, size_t idx, int thread) {
 
                 // Adjust alloc indices to overall indices.
                 IdxTuple opt(pt);

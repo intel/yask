@@ -662,7 +662,8 @@ namespace yask {
         // Example:
         // sizes_tuple.visit_all_points([&](const Tuple<int>& pt, size_t idx) { ... });
         bool visit_all_points(std::function<bool (const Tuple&,
-                                                  size_t idx)> visitor) const {
+                                                  size_t idx,
+                                                  int thread)> visitor) const {
             Tuple tp(*this);
             tp.set_vals_same(0);
 
@@ -671,7 +672,7 @@ namespace yask {
 
             // 1 point?
             if (ne <= 1) {
-                bool ok = visitor(tp, 0);
+                bool ok = visitor(tp, 0, 0);
                 return ok;
             }
 
@@ -679,7 +680,7 @@ namespace yask {
             for (T i = 0; i < ne; i++) {
 
                 // Call visitor.
-                bool ok = visitor(tp, i);
+                bool ok = visitor(tp, i, 0);
                 if (!ok)
                     return false;
 
@@ -695,7 +696,8 @@ namespace yask {
         // Visitation concurrency is not predicable.
         // Visitor return value is ignored.
         void visit_all_points_in_parallel(std::function<bool (const Tuple&,
-                                                              size_t idx)> visitor) const {
+                                                              size_t idx,
+                                                              int thread)> visitor) const {
             // Total number of points to visit.
             idx_t ne = product();
 
@@ -703,7 +705,7 @@ namespace yask {
             if (ne <= 1) {
                 Tuple tp(*this);
                 tp.set_vals_same(0);
-                visitor(tp, 0);
+                visitor(tp, 0, 0);
                 return;
             }
 
@@ -712,9 +714,7 @@ namespace yask {
             // Num threads to be started.
             idx_t nthr = yask_get_num_threads();
 
-            // Start sequential visits in parallel.
-            // (Not guaranteed that each tnum will be unique in every OMP
-            // impl, so don't rely on it.)
+            // Start visits in parallel.
             yask_parallel_for
                 (0, nthr, 1,
                  [&](idx_t n, idx_t np1, idx_t tnum) {
@@ -736,7 +736,7 @@ namespace yask {
                      for (T i = start; i < stop; i++) {
                          
                          // Call visitor.
-                         visitor(tp, i);
+                         visitor(tp, i, tnum);
                          
                          // Jump to next index.
                          next_index(tp);
