@@ -50,6 +50,9 @@ IN THE SOFTWARE.
 #ifndef YASK_DEPRECATED
 #define YASK_DEPRECATED
 #endif
+#ifndef YASK_NORETURN
+#define YASK_NORETURN
+#endif
 #define YASK_INT64_T long int
 #else
 /// Deprecated attribute.
