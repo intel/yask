@@ -202,3 +202,11 @@ endif
 YK_LIBS		:=	-lrt
 YK_LFLAGS	:=	-Wl,-rpath=$(LIB_OUT_DIR) -L$(LIB_OUT_DIR) -l$(YK_EXT_BASE)
 
+# Default number of ranks for running tests.
+# 4 is good because it tests in-plane diagonal exchanges for 2D and 3D tests.
+# 8 would test all exchanges for 3D tests.
+ifneq ($(mpi),1)
+ranks	:=	1
+else
+ranks	:=	4
+endif

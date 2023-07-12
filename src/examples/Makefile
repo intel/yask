@@ -26,3 +26,14 @@
 default:
 	$(MAKE) -f wave_eq.mk
 	$(MAKE) -f swe.mk
+
+help:
+	@echo " "; \
+	echo "Example builds and runs of applications:"; \
+	echo " $(MAKE) -j examples           # Build example applications"; \
+	echo " $(MAKE) -j example-tests      # Build and run example applications"
+
+all-tests: default
+	$(MAKE) -f wave_eq.mk $@
+	$(MAKE) -f swe.mk $@
+

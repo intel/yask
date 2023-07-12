@@ -67,6 +67,7 @@ include $(YASK_BASE)/src/common/common.mk
 #YASK_MFLAGS	+=	--output-sync --output-sync=line
 YK_MAKE		:=	$(MAKE) $(YASK_MFLAGS) -C src/kernel YASK_OUTPUT_DIR=$(YASK_OUT_BASE)
 YC_MAKE		:=	$(MAKE) $(YASK_MFLAGS) -C src/compiler YASK_OUTPUT_DIR=$(YASK_OUT_BASE)
+EX_MAKE		:=	$(MAKE) $(YASK_MFLAGS) -C src/examples YASK_OUTPUT_DIR=$(YASK_OUT_BASE)
 
 # Default flags--used only for targets in this Makefile.
 # For compiler, use YC_CXX* vars.
@@ -89,6 +90,9 @@ compiler:
 
 kernel:
 	$(YK_MAKE) $@
+
+examples:
+	$(EX_MAKE)
 
 ######## API targets
 # NB: must set stencil and arch to generate the desired kernel API.
@@ -154,6 +158,7 @@ realclean: clean
 help:
 	@ $(YC_MAKE) $@
 	@ $(YK_MAKE) $@
+	@ $(EX_MAKE) $@
 	@ echo " "
 	@ echo "'setenv CXX_PREFIX ccache' or 'export CXX_PREFIX=ccache' to use ccache."
 
@@ -269,10 +274,14 @@ unit-tests:
 	$(MAKE) tuple-test
 	$(MAKE) combo-test
 
+example-tests:
+	$(EX_MAKE) all-tests
+
 all-tests: compiler-api unit-tests
 	$(YC_MAKE) $@
 	$(YK_MAKE) $@
 	$(MAKE) combo-api-tests
+	$(MAKE) example-tests
 	$(MAKE) clean
 	@echo "All YASK tests have been run"
 

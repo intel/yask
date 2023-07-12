@@ -850,15 +850,6 @@ help:
 #################################
 # TODO: convert all testing to a separate test framework.
 
-# Default number of ranks for running tests.
-# 4 is good because it tests in-plane diagonal exchanges for 2D and 3D tests.
-# 8 would test all exchanges for 3D tests.
-ifneq ($(mpi),1)
-ranks	:=	1
-else
-ranks	:=	4
-endif
-
 # Default min & max test number to run.
 first_test	:=	0
 last_test	:=	999

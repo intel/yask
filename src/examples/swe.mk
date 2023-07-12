@@ -35,13 +35,17 @@ SWE_EXE		:=	$(BIN_OUT_DIR)/swe.exe
 ### Make targets ###
 
 default: $(SWE_EXE)
+	@ls -l $<
 
 $(SWE_EXE): swe_main.cpp $(YK_LIB)
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) $(YK_LIBS) -o $@
-	@ls -l $@
 
 $(YK_LIB): FORCE
 	$(MAKE) -C $(YASK_BASE) stencil=$(stencil) real_bytes=$(real_bytes)
 
 FORCE:
+
+all-tests: $(SWE_EXE)
+	$(RUN_PREFIX) $<
+	if (( $(ranks) > 1 )); then $(RUN_PREFIX) mpirun -np $(ranks) $<; fi
 
