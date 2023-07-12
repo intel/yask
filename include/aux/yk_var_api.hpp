@@ -962,16 +962,19 @@ namespace yask {
         #endif
 
         /// Bitmask for sum reduction.
-        static constexpr int yk_sum_reduction_mask = 0x01;
+        static constexpr int yk_sum_reduction = 0x01;
+        
+        /// Bitmask for sum-of-squares reduction.
+        static constexpr int yk_sum_squares_reduction = 0x02;
         
         /// Bitmask for product reduction.
-        static constexpr int yk_product_reduction_mask = 0x01;
+        static constexpr int yk_product_reduction = 0x04;
         
         /// Bitmask for maximum-value reduction.
-        static constexpr int yk_max_reduction_mask = 0x01;
+        static constexpr int yk_max_reduction = 0x08;
         
         /// Bitmask for minimum-value reduction.
-        static constexpr int yk_min_reduction_mask = 0x01;
+        static constexpr int yk_min_reduction = 0x10;
         
         /// Class returned from reduce_elements_in_slice().
         /**
@@ -1003,6 +1006,15 @@ namespace yask {
             */
             virtual double
             get_sum() const =0;
+
+            /// Get sum of squares.
+            /**
+               @returns sum of squares of values of elements in slice or zero (0.0) if
+               no elements were evaluated.
+               @throws yask_exception if sum-of-squares was not requested.
+            */
+            virtual double
+            get_sum_squares() const =0;
 
             /// Get product.
             /**
@@ -1043,7 +1055,7 @@ namespace yask {
            Indices are relative to the *overall* problem domain.
 
            Set `reduction_mask` to the bit-wise OR of individual mask values, e.g.,
-           `yk_var::yk_sum_reduction_mask | yk_var::yk_max_reduction_mask`.
+           `yk_var::yk_sum_reduction | yk_var::yk_max_reduction`.
 
            @returns Shared pointer to reduction result.
 

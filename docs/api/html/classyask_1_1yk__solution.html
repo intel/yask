@@ -259,6 +259,9 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a105c993241498d9c2a98cbec353fc61a"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a105c993241498d9c2a98cbec353fc61a">copy_vars_from_device</a> () const =0</td></tr>
 <tr class="memdesc:a105c993241498d9c2a98cbec353fc61a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Update data on the host.  <br /></td></tr>
 <tr class="separator:a105c993241498d9c2a98cbec353fc61a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a67e72849dd34417fe591a1fb38071c88"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a67e72849dd34417fe591a1fb38071c88">exchange_halos</a> ()=0</td></tr>
+<tr class="memdesc:a67e72849dd34417fe591a1fb38071c88"><td class="mdescLeft">&#160;</td><td class="mdescRight">Force a halo exchange now.  <br /></td></tr>
+<tr class="separator:a67e72849dd34417fe591a1fb38071c88"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:afac6a33fe5d098d31a844f4eba654b19"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#afac6a33fe5d098d31a844f4eba654b19">end_solution</a> ()=0</td></tr>
 <tr class="memdesc:afac6a33fe5d098d31a844f4eba654b19"><td class="mdescLeft">&#160;</td><td class="mdescRight">Finish using a solution.  <br /></td></tr>
 <tr class="separator:afac6a33fe5d098d31a844f4eba654b19"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -2197,6 +2200,34 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 
 </div>
 </div>
+<a id="a67e72849dd34417fe591a1fb38071c88" name="a67e72849dd34417fe591a1fb38071c88"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a67e72849dd34417fe591a1fb38071c88">&#9670;&#160;</a></span>exchange_halos()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void yask::yk_solution::exchange_halos </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Force a halo exchange now. </p>
+<p>Can be used to exchange data between ranks before <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a> is called. </p>
+
+</div>
+</div>
 <a id="afac6a33fe5d098d31a844f4eba654b19" name="afac6a33fe5d098d31a844f4eba654b19"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#afac6a33fe5d098d31a844f4eba654b19">&#9670;&#160;</a></span>end_solution()</h2>
 
@@ -2221,7 +2252,7 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 </div><div class="memdoc">
 
 <p>Finish using a solution. </p>
-<p>Performs a final MPI halo exchange. Releases shared ownership of memory used by the vars. This will result in deallocating each memory block that is not referenced by another shared pointer. </p>
+<p>Releases shared ownership of memory used by the vars. This will result in deallocating each memory block that is not referenced by another shared pointer. </p>
 
 </div>
 </div>

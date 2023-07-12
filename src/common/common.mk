@@ -78,16 +78,14 @@ BASH		:=	/bin/bash
 INDENT		:=	$(UTILS_BIN_DIR)/yask_indent.sh
 PYTHON  	:=	python3
 SHELL		:=	/bin/bash
-
-# Find include path needed for python interface.
-# NB: constructing string inside print() to work for python 2 or 3.
-PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc() + " " + distutils.sysconfig.get_python_inc(plat_specific=1))'))
-
-# OS-specific
 SO_SUFFIX	:=	.so
 RUN_PREFIX	:=	env I_MPI_DEBUG=+5 I_MPI_PRINT_VERSION=1 OMP_DISPLAY_ENV=VERBOSE KMP_VERSION=1
 RUN_PYTHON	:= 	$(RUN_PREFIX) \
 	env PYTHONPATH=$(LIB_DIR):$(LIB_OUT_DIR):$(PY_OUT_DIR):$(YASK_DIR):$(PYTHONPATH) $(PYTHON)
+
+# Find include path needed for python interface.
+# NB: constructing string inside print() to work for python 2 or 3.
+PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc() + " " + distutils.sysconfig.get_python_inc(plat_specific=1))'))
 
 # Function to check for pre-defined compiler macro.
 # Invokes compiler using 1st arg.
@@ -196,7 +194,11 @@ YK_CXXOPT	:=	-O3
 YK_CXXDBG	:=	-g
 YK_CXXWARN	:=	-Wall
 YK_CXXFLAGS	:=	-std=c++17 $(YK_CXXDBG) $(YK_CXXOPT) $(YK_CXXWARN) -I$(INC_DIR) $(EXTRA_YK_CXXFLAGS)
+ifeq ($(mpi),1)
+ YK_CXXFLAGS	+=	-DUSE_MPI
+endif
 
 # Linker flags.
 YK_LIBS		:=	-lrt
 YK_LFLAGS	:=	-Wl,-rpath=$(LIB_OUT_DIR) -L$(LIB_OUT_DIR) -l$(YK_EXT_BASE)
+

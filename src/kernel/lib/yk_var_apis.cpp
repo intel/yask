@@ -586,6 +586,7 @@ namespace yask {
         int _mask = 0;
         idx_t _nred = 0;
         double _sum = 0.0;
+        double _sum_sq = 0.0;
         double _prod = 1.0;
         double _max = DBL_MIN;
         double _min = DBL_MAX;
@@ -604,22 +605,27 @@ namespace yask {
         
         /// Get results
         double get_sum() const {
-            if (_mask & yk_var::yk_sum_reduction_mask)
+            if (_mask & yk_var::yk_sum_reduction)
                 return _sum;
             THROW_YASK_EXCEPTION("Sum reduction not available");
         }
+        double get_sum_squares() const {
+            if (_mask & yk_var::yk_sum_squares_reduction)
+                return _sum;
+            THROW_YASK_EXCEPTION("Sum-of-squares reduction not available");
+        }
         double get_product() const {
-            if (_mask & yk_var::yk_product_reduction_mask)
+            if (_mask & yk_var::yk_product_reduction)
                 return _prod;
             THROW_YASK_EXCEPTION("Product reduction not available");
         }
         double get_max() const {
-            if (_mask & yk_var::yk_max_reduction_mask)
+            if (_mask & yk_var::yk_max_reduction)
                 return _max;
             THROW_YASK_EXCEPTION("Max reduction not available");
         }
         double get_min() const {
-            if (_mask & yk_var::yk_sum_reduction_mask)
+            if (_mask & yk_var::yk_sum_reduction)
                 return _min;
             THROW_YASK_EXCEPTION("Min reduction not available");
         }
@@ -656,13 +662,15 @@ namespace yask {
 
                 // Do desired reduction(s).
                 int mask = resp->_mask;
-                if (mask & yk_var::yk_sum_reduction_mask)
+                if (mask & yk_var::yk_sum_reduction)
                     resp->_sum += val;
-                if (mask & yk_var::yk_product_reduction_mask)
+                if (mask & yk_var::yk_sum_squares_reduction)
+                    resp->_sum_sq += val * val;
+                if (mask & yk_var::yk_product_reduction)
                     resp->_prod *= val;
-                if (mask & yk_var::yk_max_reduction_mask)
+                if (mask & yk_var::yk_max_reduction)
                     resp->_max = max(resp->_max, val);
-                if (mask & yk_var::yk_min_reduction_mask)
+                if (mask & yk_var::yk_min_reduction)
                     resp->_min = min(resp->_min, val);
             }
         };
@@ -696,6 +704,7 @@ namespace yask {
         for (int i = 0; i < nthr; i++) {
             auto* p = resp.get();
             p->_sum += resa[i]._sum;
+            p->_sum_sq += resa[i]._sum;
             p->_prod *= resa[i]._prod;
             p->_max = max(p->_max, resa[i]._max);
             p->_min = min(p->_min, resa[i]._min);

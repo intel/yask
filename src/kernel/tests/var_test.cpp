@@ -164,7 +164,7 @@ void run_tests(int argc, char* argv[]) {
             case 0: {
                 os << " element-by-element in parallel on host...\n";
                 sizes.visit_all_points_in_parallel
-                    ( [&](const IdxTuple& pt, size_t idx) {
+                    ( [&](const IdxTuple& pt, size_t idx, int thread) {
                           IdxTuple pt2 = pt;
                           for (auto dname : gdims)
                               pt2[dname] += first[dname];
@@ -243,8 +243,7 @@ void run_tests(int argc, char* argv[]) {
                 idx_t nbad = 0, npts = 0;
                 idx_t max_bad = 50;
                 sizes.visit_all_points
-                    ([&](const IdxTuple& pt,
-                         size_t idx) {
+                    ([&](const IdxTuple& pt, size_t idx, int thread) {
                          npts++;
                          IdxTuple pt2 = pt;
                          for (auto dname : gdims)

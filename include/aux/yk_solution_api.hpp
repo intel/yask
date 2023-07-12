@@ -791,9 +791,16 @@ namespace yask {
         virtual void
         copy_vars_from_device() const =0;
 
+        /// Force a halo exchange now.
+        /**
+           Can be used to exchange data between ranks before run_solution()
+           is called.
+        */
+        virtual void
+        exchange_halos() =0;
+
         /// Finish using a solution.
         /**
-           Performs a final MPI halo exchange.
            Releases shared ownership of memory used by the vars.  This will
            result in deallocating each memory block that is not
            referenced by another shared pointer.

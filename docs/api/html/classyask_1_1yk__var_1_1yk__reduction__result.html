@@ -97,6 +97,9 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:af9bd08ccf2c09d4f3c81f0f7a2d7c890"><td class="memItemLeft" align="right" valign="top">virtual double&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var_1_1yk__reduction__result.html#af9bd08ccf2c09d4f3c81f0f7a2d7c890">get_sum</a> () const =0</td></tr>
 <tr class="memdesc:af9bd08ccf2c09d4f3c81f0f7a2d7c890"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get sum.  <br /></td></tr>
 <tr class="separator:af9bd08ccf2c09d4f3c81f0f7a2d7c890"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae49295096c6592b863250eafd9e5f326"><td class="memItemLeft" align="right" valign="top">virtual double&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var_1_1yk__reduction__result.html#ae49295096c6592b863250eafd9e5f326">get_sum_squares</a> () const =0</td></tr>
+<tr class="memdesc:ae49295096c6592b863250eafd9e5f326"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get sum of squares.  <br /></td></tr>
+<tr class="separator:ae49295096c6592b863250eafd9e5f326"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a1ef432b43adc12614253afc5cc28a52f"><td class="memItemLeft" align="right" valign="top">virtual double&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var_1_1yk__reduction__result.html#a1ef432b43adc12614253afc5cc28a52f">get_product</a> () const =0</td></tr>
 <tr class="memdesc:a1ef432b43adc12614253afc5cc28a52f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get product.  <br /></td></tr>
 <tr class="separator:a1ef432b43adc12614253afc5cc28a52f"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -195,6 +198,40 @@ Public Member Functions</h2></td></tr>
 <dl class="exception"><dt>Exceptions</dt><dd>
   <table class="exception">
     <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if sum was not requested. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="ae49295096c6592b863250eafd9e5f326" name="ae49295096c6592b863250eafd9e5f326"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae49295096c6592b863250eafd9e5f326">&#9670;&#160;</a></span>get_sum_squares()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual double yask::yk_var::yk_reduction_result::get_sum_squares </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get sum of squares. </p>
+<dl class="section return"><dt>Returns</dt><dd>sum of squares of values of elements in slice or zero (0.0) if no elements were evaluated. </dd></dl>
+<dl class="exception"><dt>Exceptions</dt><dd>
+  <table class="exception">
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if sum-of-squares was not requested. </td></tr>
   </table>
   </dd>
 </dl>

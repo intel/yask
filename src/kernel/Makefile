@@ -264,6 +264,9 @@ VIEW_ASM	:=	$(UTILS_BIN_DIR)/view_asm.pl
 
 # Run knobs
 YK_SCRIPT_FLAGS	+= "-stencil" $(YK_STENCIL) "-arch" $(YK_ARCH)
+ifeq ($(mpi),0)
+ YK_SCRIPT_FLAGS += 	-ranks 1
+endif
 
 # Additional flags for building kernel lib.
 # These are not used for building apps that use only the APIs.
@@ -423,13 +426,6 @@ else
 endif
 ifeq ($(offload_usm),1)
  MACROS		+=	USE_OFFLOAD_USM
-endif
-
-# Add options for MPI.
-ifeq ($(mpi),1)
- MACROS		+=	USE_MPI
-else
- YK_SCRIPT_FLAGS += 	-ranks 1
 endif
 
 # Compile with model_cache=1 or 2 to check prefetching.

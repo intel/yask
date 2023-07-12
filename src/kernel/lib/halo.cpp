@@ -64,8 +64,19 @@ namespace yask {
       * Device halo exchange w/o direct device copy w/shm.
       * Device halo exchange w/direct device copy w/shm.
     */
-    
+
     // Exchange dirty halo data for all vars and all steps.
+    void StencilContext::exchange_halos() {
+        
+        // Do all parts.
+        MpiSection mpisec(this);
+        mpisec.init();
+        
+        exchange_halos(mpisec);
+    }
+    
+    // Exchange dirty halo data for all vars and all steps for
+    // given sections.
     void StencilContext::exchange_halos(MpiSection& mpisec) {
 
         #if defined(USE_MPI)
