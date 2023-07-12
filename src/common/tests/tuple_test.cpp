@@ -100,7 +100,7 @@ void ttest(bool first_inner) {
         j = 0;
         size_t sumk = 0;
         t2.visit_all_points
-            ([&](const IntTuple& ofs, size_t k) {
+            ([&](const IntTuple& ofs, size_t k, int thread) {
 
                  os << " offset at " << ofs.make_dim_val_str() << flush;
                  for (int d1 = 0; d1 < d; d1++) {
@@ -132,13 +132,16 @@ void ttest(bool first_inner) {
                 j = 0;
                 sumk = 0;
                 t2.visit_all_points_in_parallel
-                    ([&](const IntTuple& ofs, size_t k) {
+                    ([&](const IntTuple& ofs, size_t k, int thread) {
 
                          assert(int(k) < n);
+                         assert(thread >= 0);
+                         assert(thread < t0 * t1);
                          auto i = t2.layout(ofs);
                          #pragma omp critical
                          {
-                             os << " offset at " << ofs.make_dim_val_str() << " = " << i << endl;
+                             os << " offset at " << ofs.make_dim_val_str() << " = " << i <<
+                                 " on thread " << thread << endl;
                              j++;
                              sumk += k;
                          }
