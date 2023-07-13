@@ -139,10 +139,10 @@ namespace yask {
        overall problem domain in each dimension:
        <table>
        <tr><td>extra left padding of rank A <td>halo of rank A <td>domain of rank A <td>domain of rank B
-         <td>... <td>domain of rank Z <td>halo of rank Z <td>extra right padding of rank Z
+       <td>... <td>domain of rank Z <td>halo of rank Z <td>extra right padding of rank Z
        <tr><td colspan="2"><center>left padding of rank A</center>
-         <td colspan="4"><center>overall problem domain</center>
-         <td colspan="2"><center>right padding of rank Z</center>
+       <td colspan="4"><center>overall problem domain</center>
+       <td colspan="2"><center>right padding of rank Z</center>
        </table>
        Halos and paddings between ranks also exist, but are not shown in the above diagram.
        The halos overlap the domains of adjacent ranks.
@@ -251,8 +251,8 @@ namespace yask {
         */
         virtual idx_t
         get_first_local_index(const std::string& dim
-                                /**< [in] Name of dimension to get.  Must be one of
-                                   the names from get_dim_names(). */ ) const =0;
+                              /**< [in] Name of dimension to get.  Must be one of
+                                 the names from get_dim_names(). */ ) const =0;
 
         /// Get the first valid index in this rank in all dimensions in this var.
         /**
@@ -278,8 +278,8 @@ namespace yask {
         */
         virtual idx_t
         get_last_local_index(const std::string& dim
-                               /**< [in] Name of dimension to get.  Must be one of
-                                  the names from get_dim_names(). */ ) const =0;
+                             /**< [in] Name of dimension to get.  Must be one of
+                                the names from get_dim_names(). */ ) const =0;
 
         /// Get the last valid index in this rank in all dimensions in this var.
         /**
@@ -392,9 +392,9 @@ namespace yask {
         */
         virtual idx_t
         get_last_rank_domain_index(const std::string& dim
-                                    /**< [in] Name of dimension to get.  Must be one of
-                                       the names from get_dim_names() and also
-                                       yk_solution::get_domain_dim_names(). */ ) const =0;
+                                   /**< [in] Name of dimension to get.  Must be one of
+                                      the names from get_dim_names() and also
+                                      yk_solution::get_domain_dim_names(). */ ) const =0;
 
         /// Get the last index of the sub-domain in this rank in all domain dimensions in this var.
         /**
@@ -565,7 +565,7 @@ namespace yask {
         are_indices_local(const idx_t_vec& indices
                           /**< [in] List of indices, one for each var dimension. */ ) const =0;
 
-#ifndef SWIG
+        #ifndef SWIG
         /// Determine whether the given indices refer to an accessible element in this rank.
         /**
            See are_indices_local().
@@ -573,31 +573,42 @@ namespace yask {
         virtual bool
         are_indices_local(const idx_t_init_list& indices
                           /**< [in] List of indices, one for each var dimension. */ ) const =0;
-#endif
+        #endif
 
         /// Read the value of one element in this var.
         /**
-           Provide indices in a list in the same order returned by get_dim_names().
+           Provide indices in a list in the same order listed when the var was defined,
+           i,e., the order returned by get_dim_names().
            Indices are relative to the *overall* problem domain.
-           Index values must fall between the values returned by
-           get_first_local_index() and get_last_local_index(), inclusive,
-           for each dimension in the var.
+
+           @note The return value is a double-precision floating-point value;
+           it will be converted to double-precision for single-precision vars.
+
+           @note do not use this API to get many contiguous values; get_elements_in_slice()
+           is much more efficient.
+
            @returns value in var at given indices.
+
+           @throws yask_exception if storage has not been allocated.
+           @throws yask_exception if are_indices_local(indices) would return `false`.
         */
         virtual double
         get_element(const idx_t_vec& indices
                     /**< [in] List of indices, one for each var dimension. */ ) const =0;
 
-#ifndef SWIG
+        #ifndef SWIG
         /// Read the value of one element in this var.
         /**
-           See get_element().
+           See get_element(const idx_t_vec& indices).
            @returns value in var at given indices.
+
+           @throws yask_exception if storage has not been allocated.
+           @throws yask_exception if are_indices_local(indices) would return `false`.
         */
         virtual double
         get_element(const idx_t_init_list& indices
                     /**< [in] List of indices, one for each var dimension. */ ) const =0;
-#endif
+        #endif
 
         /// Set the value of one element in this var.
         /**
@@ -608,69 +619,137 @@ namespace yask {
            If `strict_indices` is `false` and any non-step index values
            are invalid as defined by are_indices_local(),
            the API will have no effect and return zero (0).
-           If storage has not been allocated for this var, this will have no effect
-           and return zero (0) if `strict_indices` is `false`.
+
            @note The parameter value is a double-precision floating-point value, but
-           it will be converted to single-precision if
-           yk_solution::get_element_bytes() returns 4.
+           it will be converted to single-precision for single-precision vars.
+
+           @note do not use this API to set many contiguous values; set_elements_in_slice()
+           is much more efficient.
+
            @returns Number of elements set, which will be one (1) if the indices
            are valid and zero (0) if they are not.
-           @throws yask_exception if `strict_indices` is `true` and any non-step index values
-           are invalid or storage has not been allocated.
+
+           @throws yask_exception if storage has not been allocated.
+           @throws yask_exception if `strict_indices` is `true` and are_indices_local(indices) would return `false`.
         */
         virtual idx_t
         set_element(double val /**< [in] Element in var will be set to this. */,
                     const idx_t_vec& indices
                     /**< [in] List of indices, one for each var dimension. */,
                     bool strict_indices = true
-                    /**< [in] If true, indices must be within domain or padding.
+                    /**< [in] If true, indices must be within the allocated
+                       range in this rank.
                        If false, indices outside of domain and padding result
                        in no change to var. */ ) =0;
 
-#ifndef SWIG
+        #ifndef SWIG
         /// Set the value of one element in this var.
         /**
-           See set_element().
+           See set_element(double val, const idx_t_vec& indices, bool strict_indices).
            @returns Number of elements set.
+
+           @throws yask_exception if storage has not been allocated.
+           @throws yask_exception if `strict_indices` is `true` and are_indices_local(indices) would return `false`.
         */
         virtual idx_t
         set_element(double val /**< [in] Element in var will be set to this. */,
                     const idx_t_init_list& indices
                     /**< [in] List of indices, one for each var dimension. */,
                     bool strict_indices = true
-                    /**< [in] If true, indices must be within domain or padding.
+                    /**< [in] If true, indices must be within the allocated
+                       range in this rank.
                        If false, indices outside of domain and padding result
                        in no change to var. */ ) =0;
-#endif
 
-        /// Copy elements within specified subset of this var into a buffer.
+        /// Copy elements within specified subset of this var into a `float` buffer.
         /**
-           Reads all elements from `first_indices` to `last_indices` in each dimension
-           and writes them to consecutive memory locations in the buffer.
-           Indices in the buffer progress in row-major order, i.e.,
-           traditional C-language layout.
-           The buffer pointed to must contain the number of bytes equal to
-           yk_solution::get_element_bytes(), i.e., the size of a FP element,
-           multiplied by the total number of elements in the specified slice.
-           Thus, the buffer must be a simple flat array of data, not containing
-           pointers; for example, for a 2-D YASK var created with indices `{ x, y }`,
-           the buffer could be declared as `float A[xsize][ysize]`, but not as `float** A`.
-           Since the reads proceed in row-major order, the last index is "unit-stride"
-           in the buffer.
+           Reads all elements from `first_indices` to `last_indices` in each
+           dimension and writes them to consecutive memory locations in the
+           buffer.  Indices in the buffer progress in row-major order, i.e.,
+           traditional C-language layout, using the order of dimensions when
+           the var was declared.  In other words, the last index is
+           "unit-stride" in the buffer.
 
-           Provide indices in two lists in the same order returned by get_dim_names().
+           The buffer pointed to must contain at least the number of floats
+           as the total number of elements in the specified slice.  Thus,
+           the buffer must be a simple flat array of data, not containing
+           pointers; for example, for a 2-D YASK var created via
+           `MAKE_VAR(A, x, y)`, the buffer could be declared as `float
+           A[xsize*ysize]` or `float A[xsize][ysize]`, but *not* as `float**
+           A`.
+
+           Provide indices in two lists in the same order used during
+           var declaration.
            Indices are relative to the *overall* problem domain.
-           Index values must fall between the values returned by
-           get_first_local_index() and get_last_local_index(), inclusive.
+
+           @note if this is a double-precision solution, each value will be converted
+           to a `float`, and precision will be lost. 
+           The `float*` version is also more efficient.
+
            @returns Number of elements read.
+
+           @throws yask_exception if the index values do not fall between the values returned by
+           get_first_local_index() and get_last_local_index(), inclusive.
+
+           @throws yask_exception if storage has not been allocated.
+
+           @throws yask_exception if `buffer_size` is less than the number of values that would
+           be read.
         */
         virtual idx_t
-        get_elements_in_slice(void* buffer_ptr
+        get_elements_in_slice(float* buffer_ptr
                               /**< [out] Pointer to buffer where values will be written. */,
+                              size_t buffer_size
+                              /**< [in] Number of `float` elements in `buffer_ptr` array */,
                               const idx_t_vec& first_indices
                               /**< [in] List of initial indices, one for each var dimension. */,
                               const idx_t_vec& last_indices
                               /**< [in] List of final indices, one for each var dimension. */ ) const =0;
+
+        /// Copy elements within specified subset of this var into a `double` buffer.
+        /**
+           Reads all elements from `first_indices` to `last_indices` in each
+           dimension and writes them to consecutive memory locations in the
+           buffer.  Indices in the buffer progress in row-major order, i.e.,
+           traditional C-language layout, using the order of dimensions when
+           the var was declared.  In other words, the last index is
+           "unit-stride" in the buffer.
+
+           The buffer pointed to must contain at least the number of doubles
+           as the total number of elements in the specified slice.  Thus,
+           the buffer must be a simple flat array of data, not containing
+           pointers; for example, for a 2-D YASK var created via
+           `MAKE_VAR(A, x, y)`, the buffer could be declared as `double
+           A[xsize*ysize]` or `double A[xsize][ysize]`, but *not* as
+           `double** A`.
+
+           Provide indices in two lists in the same order used during
+           var declaration.
+           Indices are relative to the *overall* problem domain.
+
+           @note if this is a single-precision solution, each value will be converted
+           to a `double`. The `double*` version is more efficient.
+
+           @returns Number of elements read.
+
+           @throws yask_exception if the index values do not fall between the values returned by
+           get_first_local_index() and get_last_local_index(), inclusive.
+
+           @throws yask_exception if storage has not been allocated.
+
+           @throws yask_exception if `buffer_size` is less than the number of values that would
+           be read.
+        */
+        virtual idx_t
+        get_elements_in_slice(double* buffer_ptr
+                              /**< [out] Pointer to buffer where values will be written. */,
+                              size_t buffer_size
+                              /**< [in] Number of `double` elements in `buffer_ptr` array */,
+                              const idx_t_vec& first_indices
+                              /**< [in] List of initial indices, one for each var dimension. */,
+                              const idx_t_vec& last_indices
+                              /**< [in] List of final indices, one for each var dimension. */ ) const =0;
+        #endif
 
         /// Atomically add to the value of one var element.
         /**
@@ -682,10 +761,12 @@ namespace yask {
            several OpenMP threads without causing a race condition.
            If storage has not been allocated for this var, this will have no effect
            and return zero (0) if `strict_indices` is `false`.
+
            @note The parameter value is a double-precision floating-point value, but
-           it will be converted to single-precision if
-           yk_solution::get_element_bytes() returns 4.
+           it will be converted to single-precision if this is a single-precision solution.
+
            @returns Number of elements updated.
+
            @throws yask_exception if `strict_indices` is `true` and any non-step index values
            are invalid or storage has not been allocated.
         */
@@ -698,7 +779,7 @@ namespace yask {
                           If false, indices outside of domain and padding result
                           in no change to var. */ ) =0;
 
-#ifndef SWIG
+        #ifndef SWIG
         /// Atomically add to the value of one var element.
         /**
            See add_to_element().
@@ -712,13 +793,14 @@ namespace yask {
                        /**< [in] If true, indices must be within domain or padding.
                           If false, indices outside of domain and padding result
                           in no change to var. */ ) =0;
-#endif
+        #endif
 
         /// Initialize all var elements to the same value.
         /**
            Sets all allocated elements, including those in the domain and padding
            area to the same specified value.
            If storage has not been allocated, this will have no effect.
+
            @note The parameter is a double-precision floating-point value, but
            it will be converted to single-precision if
            yk_solution::get_element_bytes() returns 4.
@@ -730,16 +812,20 @@ namespace yask {
         /**
            Sets all elements from `first_indices` to `last_indices` in each dimension to the
            specified value.
-           Provide indices in two lists in the same order returned by get_dim_names().
+           Provide indices in two lists in the same order used during
+           var declaration.
            Indices are relative to the *overall* problem domain.
-           Index values must fall between the values returned by
-           get_first_local_index() and get_last_local_index(), inclusive,
-           if `strict_indices` is `true`.
-           If storage has not been allocated for this var, this will have no effect
-           and return zero (0) if `strict_indices` is `false`.
+
+           @note The parameter is a double-precision floating-point value, but
+           it will be converted to single-precision if this is a single-precision solution.
+
            @returns Number of elements set.
+
+           @throws yask_exception if storage has not been allocated.
+
            @throws yask_exception if `strict_indices` is `true` and any non-step index values
-           are invalid or storage has not been allocated.
+           do not fall between the values returned by
+           get_first_local_index() and get_last_local_index(), inclusive.
         */
         virtual idx_t
         set_elements_in_slice_same(double val /**< [in] All elements in the slice will be set to this. */,
@@ -752,38 +838,99 @@ namespace yask {
                                       If false, only elements within the allocation of this var
                                       will be set, and elements outside will be ignored. */ ) =0;
 
-        /// Set var elements within specified subset of the var from values in a buffer.
+        #ifndef SWIG
+        /// Set elements within specified subset of the var from values in a `float` buffer.
         /**
-           Reads elements from consecutive memory locations,
-           starting at `buffer_ptr`
-           and writes them from `first_indices` to `last_indices` in each dimension.
-           Indices in the buffer progress in row-major order, i.e.,
-           traditional C-language layout.
-           The buffer pointed to must contain the number of bytes equal to
-           yk_solution::get_element_bytes(), i.e., the size of a FP element,
-           multiplied by the total number of elements in the specified slice.
-           Thus, the buffer must be a simple flat array of data, not containing
-           pointers; for example, for a 2-D YASK var created with indices `{ x, y }`,
-           the buffer could be declared as `float A[xsize][ysize]`, but not as `float** A`.
-           Since the writes proceed in row-major order, the last index is "unit-stride"
-           in the buffer.
+           Reads `float` values from consecutive memory locations, starting
+           at `buffer_ptr` and writes them from `first_indices` to
+           `last_indices` in each dimension.  Indices in the buffer progress
+           in row-major order, i.e., traditional C-language layout, using
+           the order of dimensions when the var was declared. In other
+           words, the last index is "unit-stride" in the buffer.
 
-           Provide indices in two lists in the same order returned by get_dim_names().
+           The buffer pointed to must contain at least the number of floats
+           as the total number of elements in the specified slice.
+           Thus, the buffer must be a simple flat array of data, not
+           containing pointers; for example, for a 2-D YASK var created via
+           `MAKE_VAR(A, x, y)`, the buffer could be declared as `float
+           A[xsize*ysize]` or `float A[xsize][ysize]`, but *not* as `float**
+           A`.
+
+           Provide indices in two lists in the same order used during
+           var declaration.
            Indices are relative to the *overall* problem domain.
-           Index values must fall between the values returned by
-           get_first_local_index() and get_last_local_index(), inclusive.
+
+           @note if this is a double-precision solution, each value will be converted
+           to a `double`. The `double*` version is more efficient.
+
            @returns Number of elements written.
+
+           @throws yask_exception if the index values do not fall between the values returned by
+           get_first_local_index() and get_last_local_index(), inclusive.
+
            @throws yask_exception if storage has not been allocated.
+
+           @throws yask_exception if `buffer_size` is less than the number of values that would
+           be written.
         */
         virtual idx_t
-        set_elements_in_slice(const void* buffer_ptr
+        set_elements_in_slice(const float* buffer_ptr
                               /**< [out] Pointer to buffer where values will be read. */,
+                              size_t buffer_size
+                              /**< [in] Number of `float` elements in `buffer_ptr` array */,
                               const idx_t_vec& first_indices
                               /**< [in] List of initial indices, one for each var dimension. */,
                               const idx_t_vec& last_indices
                               /**< [in] List of final indices, one for each var dimension. */ ) =0;
 
-#ifdef COPY_SLICE_IMPLEMENTED
+
+        /// Set elements within specified subset of the var from values in a `double` buffer.
+        /**
+           Reads `double` values from consecutive memory locations, starting
+           at `buffer_ptr` and writes them from `first_indices` to
+           `last_indices` in each dimension.  Indices in the buffer progress
+           in row-major order, i.e., traditional C-language layout, using
+           the order of dimensions when the var was declared. In other
+           words, the last index is "unit-stride" in the buffer.
+
+           The buffer pointed to must contain at least the number of doubles
+           as the total number of elements in the specified slice.
+           Thus, the buffer must be a simple flat array of data, not
+           containing pointers; for example, for a 2-D YASK var created via
+           `MAKE_VAR(A, x, y)`, the buffer could be declared as `double
+           A[xsize*ysize]` or `double A[xsize][ysize]`, but *not* as `double**
+           A`.
+
+           Provide indices in two lists in the same order used during
+           var declaration.
+           Indices are relative to the *overall* problem domain.
+
+           @note if this is a single-precision solution, each value will be converted
+           to a `float`, and precision will be lost.
+           The `float*` version is also more efficient.
+
+           @returns Number of elements written.
+
+           @throws yask_exception if the index values do not fall between the values returned by
+           get_first_local_index() and get_last_local_index(), inclusive.
+
+           @throws yask_exception if storage has not been allocated.
+
+           @throws yask_exception if `buffer_size` is less than the number of values that would
+           be written.
+        */
+        virtual idx_t
+        set_elements_in_slice(const double* buffer_ptr
+                              /**< [out] Pointer to buffer where values will be read. */,
+                              size_t buffer_size
+                              /**< [in] Number of `double` elements in `buffer_ptr` array */,
+                              const idx_t_vec& first_indices
+                              /**< [in] List of initial indices, one for each var dimension. */,
+                              const idx_t_vec& last_indices
+                              /**< [in] List of final indices, one for each var dimension. */ ) =0;
+        #endif
+
+        #ifdef COPY_SLICE_IMPLEMENTED
         /// Copy specified var elements from another (source) var into this (target) var.
         /**
            Reads elements starting at `first_source_indices` in the `source` var and
@@ -812,7 +959,122 @@ namespace yask {
                               const idx_t_vec& last_target_indices
                               /**< [in] List of final indices in this (target) var,
                                  one for each var dimension. */ ) =0;
-#endif
+        #endif
+
+        /// Bitmask for sum reduction.
+        static constexpr int yk_sum_reduction = 0x01;
+        
+        /// Bitmask for sum-of-squares reduction.
+        static constexpr int yk_sum_squares_reduction = 0x02;
+        
+        /// Bitmask for product reduction.
+        static constexpr int yk_product_reduction = 0x04;
+        
+        /// Bitmask for maximum-value reduction.
+        static constexpr int yk_max_reduction = 0x08;
+        
+        /// Bitmask for minimum-value reduction.
+        static constexpr int yk_min_reduction = 0x10;
+        
+        /// Class returned from reduce_elements_in_slice().
+        /**
+           @note The reduced values are all doubles regardless of the
+           precision of the solution.
+        */
+        class yk_reduction_result {
+        public:
+
+            /// Get the allowed reductions.
+            /**
+               @returns the bitmask of reductions provided.
+            */
+            virtual int
+            get_reduction_mask() const =0;
+
+            /// Get the number of elements reduced.
+            /**
+               @returns the number of elements evaluated.
+            */
+            virtual idx_t
+            get_num_elements_reduced() const =0;
+
+            /// Get sum.
+            /**
+               @returns sum of values of elements in slice or zero (0.0) if
+               no elements were evaluated.
+               @throws yask_exception if sum was not requested.
+            */
+            virtual double
+            get_sum() const =0;
+
+            /// Get sum of squares.
+            /**
+               @returns sum of squares of values of elements in slice or zero (0.0) if
+               no elements were evaluated.
+               @throws yask_exception if sum-of-squares was not requested.
+            */
+            virtual double
+            get_sum_squares() const =0;
+
+            /// Get product.
+            /**
+               @returns product of values of elements in slice or one (1.0) if
+               no elements were evaluated.
+               @throws yask_exception if product was not requested.
+            */
+            virtual double
+            get_product() const =0;
+
+            /// Get max.
+            /**
+               @returns maximum of values of elements in slice or `MIN_DBL` if
+               no elements were evaluated.
+               @throws yask_exception if max was not requested.
+            */
+            virtual double
+            get_max() const =0;
+
+            /// Get min.
+            /**
+               @returns minimum of values of elements in slice or `MAX_DBL` if
+               no elements were evaluated.
+               @throws yask_exception if sum was not requested.
+            */
+            virtual double
+            get_min() const =0;
+        };
+
+        /// Shared pointer to \ref yk_reduction_result.
+        typedef std::shared_ptr<yk_reduction_result> yk_reduction_result_ptr;
+        
+        /// Perform requested reductions over elements within specified subset of the var.
+        /**
+           Reduces all elements from `first_indices` to `last_indices` in each dimension.
+           Provide indices in two lists in the same order used during
+           var declaration.
+           Indices are relative to the *overall* problem domain.
+
+           Set `reduction_mask` to the bit-wise OR of individual mask values, e.g.,
+           `yk_var::yk_sum_reduction | yk_var::yk_max_reduction`.
+
+           @returns Shared pointer to reduction result.
+
+           @throws yask_exception if storage has not been allocated.
+
+           @throws yask_exception if `strict_indices` is `true` and any non-step index values
+           do not fall between the values returned by
+           get_first_local_index() and get_last_local_index(), inclusive.
+        */
+        virtual yk_reduction_result_ptr
+        reduce_elements_in_slice(int reduction_mask /**< [in] Bit-wise OR of the desired reduction masks. */,
+                                 const idx_t_vec& first_indices
+                                 /**< [in] List of initial indices, one for each var dimension. */,
+                                 const idx_t_vec& last_indices
+                                 /**< [in] List of final indices, one for each var dimension. */,
+                                 bool strict_indices = true
+                                 /**< [in] If true, indices must be within domain or padding.
+                                    If false, only elements within the allocation of this var
+                                    will be evaluated, and elements outside will be ignored. */ ) =0;
         
         /// Format the indices for human-readable display.
         /**
@@ -823,7 +1085,7 @@ namespace yask {
         format_indices(const idx_t_vec& indices
                        /**< [in] List of indices, one for each var dimension. */ ) const =0;
 
-#ifndef SWIG
+        #ifndef SWIG
         /// Format the indices for human-readable display.
         /**
            See format_indices().
@@ -832,7 +1094,7 @@ namespace yask {
         virtual std::string
         format_indices(const idx_t_init_list& indices
                        /**< [in] List of indices, one for each var dimension. */ ) const =0;
-#endif
+        #endif
 
         /* Advanced APIs for yk_var found below are not needed for most applications. */
 
@@ -846,7 +1108,7 @@ namespace yask {
            Examples for a domain size with 2 spatial dimensions (e.g., "x" and "y"):
            * L1-norm = 0: no halos are exchanged for this var.
            * L1-norm = 1: halos are exchanged between "up", "down", "left" and "right"
-             neighbors.
+           neighbors.
            * L1-norm = 2: halos are exchanged as above plus diagonal neighbors.
 
            The actual exchanges are further controlled by the size of the halo in each
@@ -871,7 +1133,7 @@ namespace yask {
         /// **[Advanced]** Get whether the allocation of the step dimension of this var can be modified at run-time.
         /**
            See set_alloc_size().
-         */
+        */
         virtual bool
         is_dynamic_step_alloc() const =0;
 
@@ -928,12 +1190,12 @@ namespace yask {
         */
         virtual void
         set_right_min_pad_size(const std::string& dim
-                              /**< [in] Name of dimension to set.
-                                 Must be one of
-                                 the names from yk_solution::get_domain_dim_names(). */,
-                              idx_t size
-                              /**< [in] Minimum number of elements to allocate
-                                 after the domain size. */ ) =0;
+                               /**< [in] Name of dimension to set.
+                                  Must be one of
+                                  the names from yk_solution::get_domain_dim_names(). */,
+                               idx_t size
+                               /**< [in] Minimum number of elements to allocate
+                                  after the domain size. */ ) =0;
 
         /// **[Advanced]** Set the minimum padding in the specified dimension.
         /**
@@ -960,11 +1222,11 @@ namespace yask {
         */
         virtual void
         set_left_halo_size(const std::string& dim
-                      /**< [in] Name of dimension to get.
-                         Must be one of
-                         the names from yk_solution::get_domain_dim_names(). */,
-                      idx_t size
-                      /**< [in] Number of elements in the left halo. */ ) =0;
+                           /**< [in] Name of dimension to get.
+                              Must be one of
+                              the names from yk_solution::get_domain_dim_names(). */,
+                           idx_t size
+                           /**< [in] Number of elements in the left halo. */ ) =0;
 
         /// **[Advanced]** Set the right halo size in the specified dimension.
         /**
@@ -978,11 +1240,11 @@ namespace yask {
         */
         virtual void
         set_right_halo_size(const std::string& dim
-                      /**< [in] Name of dimension to get.
-                         Must be one of
-                         the names from yk_solution::get_domain_dim_names(). */,
-                      idx_t size
-                      /**< [in] Number of elements in the right halo. */ ) =0;
+                            /**< [in] Name of dimension to get.
+                               Must be one of
+                               the names from yk_solution::get_domain_dim_names(). */,
+                            idx_t size
+                            /**< [in] Number of elements in the right halo. */ ) =0;
 
         /// **[Advanced]** Set the left and right halo sizes in the specified dimension.
         /**
@@ -1042,7 +1304,7 @@ namespace yask {
                              /**< [in] Name of dimension to get.  Must be one of
                                 the names from yk_solution::get_misc_dim_names(). */,
                              idx_t idx /**< [in] New value for first index.
-                                        May be negative. */ ) =0;
+                                          May be negative. */ ) =0;
 
         /// **[Advanced]** Determine whether storage has been allocated.
         /**
@@ -1073,7 +1335,7 @@ namespace yask {
            step-dimension allocation sizes.
            Any pre-existing storage will be released before allocation as via release_storage().
            See allocation options in the "Detailed Description" for \ref yk_var.
-         */
+        */
         virtual void
         alloc_storage() =0;
 
@@ -1132,7 +1394,7 @@ namespace yask {
         */
         virtual void
         fuse_vars(yk_var_ptr source
-                   /**< [in] Var to be merged with this var. */) =0;
+                  /**< [in] Var to be merged with this var. */) =0;
 
         /// **[Advanced]** Get pointer to raw data storage buffer.
         /**
@@ -1174,6 +1436,38 @@ namespace yask {
         */
         virtual void* get_raw_storage_buffer() =0;
 
+
+        /// **[Deprecated]** Use the `float*` or `double*` version.
+        /**
+           @note This version does no type conversion. The type of elements
+           in the buffer must match the type of elements in the var.
+
+           @note At this time, this `void*` version is the only one available in the Python APIs.
+        */
+        YASK_DEPRECATED
+        virtual idx_t
+        get_elements_in_slice(void* buffer_ptr
+                              /**< [out] Pointer to buffer where values will be written. */,
+                              const idx_t_vec& first_indices
+                              /**< [in] List of initial indices, one for each var dimension. */,
+                              const idx_t_vec& last_indices
+                              /**< [in] List of final indices, one for each var dimension. */ ) const =0;
+
+        /// **[Deprecated]** Use the `float*` or `double*` version.
+        /**
+           @note This version does no type conversion. The type of elements
+           in the buffer must match the type of elements in the var.
+
+           @note At this time, this `void*` version is the only one available in the Python APIs.
+        */
+        YASK_DEPRECATED
+        virtual idx_t
+        set_elements_in_slice(const void* buffer_ptr
+                              /**< [out] Pointer to buffer where values will be read. */,
+                              const idx_t_vec& first_indices
+                              /**< [in] List of initial indices, one for each var dimension. */,
+                              const idx_t_vec& last_indices
+                              /**< [in] List of final indices, one for each var dimension. */ ) =0;
 
         /// **[Deprecated]** Use get_first_local_index().
         YASK_DEPRECATED

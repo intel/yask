@@ -37,6 +37,30 @@ IN THE SOFTWARE.
 #include <map>
 #include <functional>
 
+// Conditional inlining
+#if !defined(NO_INLINE) && !defined(CHECK)
+#ifndef ALWAYS_INLINE
+#define ALWAYS_INLINE __attribute__((always_inline)) inline
+#endif
+#ifndef FORCE_INLINE
+#define FORCE_INLINE _Pragma("forceinline")
+#endif
+#ifndef FORCE_INLINE_RECURSIVE
+#define FORCE_INLINE_RECURSIVE _Pragma("forceinline recursive")
+#endif
+
+#else
+#ifndef ALWAYS_INLINE
+#define ALWAYS_INLINE inline
+#endif
+#ifndef FORCE_INLINE
+#define FORCE_INLINE
+#endif
+#ifndef FORCE_INLINE_RECURSIVE
+#define FORCE_INLINE_RECURSIVE
+#endif
+#endif
+
 // This must come before including the API header to make sure
 // _OPENMP is defined.
 #ifdef _OPENMP
@@ -67,6 +91,9 @@ inline void omp_unset_lock(omp_lock_t* p) { }
 #define ROUND_DOWN(n, mult) (((n) / (mult)) * (mult))
 
 namespace yask {
+
+    constexpr idx_t IDX_MAX = LONG_MAX;
+    constexpr idx_t IDX_MIN = LONG_MIN;
 
     // Controls whether make*Str() functions add
     // suffixes or just print full number for
@@ -164,11 +191,9 @@ namespace yask {
     }
 
     // Execute a nested OMP for loop as if it was a single loop.
-    // 'start' will be 'begin', 'begin'+'stride', 'begin'+2*'stride', etc.
-    // 'stop' will be 'begin'+'stride', etc.
-    // However, 'stride' is just a hint; don't assume that
+    // 'start' will be 'begin' + multiple of 'stride'.
+    // 'stop' will be 'end' or 'begin' + multiple of 'stride'.
     // 'stop - start <= stride'.
-    // This will only be enforced when 'stride == 1'.
     // (Not guaranteed that each 'thread_num" will be unique in every OMP
     // impl, so don't rely on it.)
     inline void yask_parallel_for(idx_t begin, idx_t end, idx_t stride,
@@ -179,141 +204,136 @@ namespace yask {
             return;
         idx_t tn = omp_get_thread_num();
 
-        // Number of iterations in canonical loop.
-        assert(stride >= 1);
-        idx_t niter = CEIL_DIV(end - begin, stride);
-        #ifdef DEBUG_PAR_FOR
-        std::cout << "** yask_parallel_for: [" << begin << "..." << end << ") by " << stride <<
-            ": " << niter << " iters\n";
-        #endif
-
-        // Only 1 iteration.
-        if (niter == 1) {
-            visitor(begin, end, 0);
-            return;
-        }
+        FORCE_INLINE_RECURSIVE {
         
-        #ifndef _OPENMP
-        // Canonical sequential loop.
-        if (stride == 1)
-            visitor(begin, end, tn);
-        else {
+            // Number of iterations in canonical loop.
+            assert(stride >= 1);
+            idx_t niter = CEIL_DIV(end - begin, stride);
+            #ifdef DEBUG_PAR_FOR
+            std::cout << "** yask_parallel_for: [" << begin << "..." << end << ") by " << stride <<
+                ": " << niter << " iters\n";
+            #endif
+
+            // Only 1 iteration.
+            if (niter == 1) {
+                visitor(begin, end, 0);
+                return;
+            }
+        
+            #ifndef _OPENMP
+            // Canonical sequential loop.
             for (idx_t i = begin; i < end; i += stride) {
                 idx_t stop = std::min(i + stride, end);
-                visitor(i, stop, tn);
+                visitor(i, stop, 0);
             }
-        }
-        #else
+            #else
 
-        // If already in a parallel region, just
-        // execute sequential loop in current thread.
-        if (omp_get_num_threads() > 1) {
-            if (stride == 1)
-                visitor(begin, end, tn);
-            else {
+            // If already in a parallel region, just
+            // execute sequential loop in current thread.
+            if (omp_get_num_threads() > 1) {
                 for (idx_t i = begin; i < end; i += stride) {
                     idx_t stop = std::min(i + stride, end);
                     visitor(i, stop, tn);
                 }
             }
-        }
 
-        // Non-nested parallel.
-        else if (omp_get_max_active_levels() < 2 ||
-            yask_num_threads[0] <= 0 ||
-            yask_num_threads[1] <= 1 ||
-            niter <= yask_num_threads[0]) {
+            // Non-nested parallel.
+            else if (omp_get_max_active_levels() < 2 ||
+                     yask_num_threads[0] <= 0 ||
+                     yask_num_threads[1] <= 1 ||
+                     niter <= yask_num_threads[0]) {
 
-            if (yask_num_threads[0] > 0)
-                omp_set_num_threads(yask_num_threads[0]);
-            #pragma omp parallel for schedule(static)
-            for (idx_t i = begin; i < end; i += stride) {
-                idx_t stop = std::min(i + stride, end);
-                idx_t tn = omp_get_thread_num();
-                visitor(i, stop, tn);
-            }
-        }
-
-        // Nested parallel.
-        else {
-
-            // Number of outer threads.
-            idx_t nthr0 = yask_num_threads[0];
-            assert(nthr0 > 0);
-            omp_set_num_threads(nthr0);
-
-            // Outer parallel region.
-            #pragma omp parallel
-            {
-                idx_t n0 = omp_get_thread_num();
-
-                // Calculate begin and end points for this thread.
-                idx_t tbegin = div_equally_cumu_size_n(niter, nthr0, n0 - 1) * stride;
-                idx_t tend = div_equally_cumu_size_n(niter, nthr0, n0) * stride;
-                tend = std::min(tend, end);
-
-                #ifdef DEBUG_PAR_FOR
-                #pragma omp critical
-                std::cout << "** outer thread " << n0 << ": [" << tbegin << "..." << tend << ") by " <<
-                    stride << "\n" << std::flush;
-                #endif
-                assert(tend >= tbegin);
-
-                // Nothing to do?
-                if (tend <= tbegin) {
+                if (yask_num_threads[0] > 0)
+                    omp_set_num_threads(yask_num_threads[0]);
+                #pragma omp parallel for schedule(static)
+                for (idx_t i = begin; i < end; i += stride) {
+                    idx_t stop = std::min(i + stride, end);
+                    idx_t tn = omp_get_thread_num();
+                    visitor(i, stop, tn);
                 }
+            }
 
-                // Only need one iter in this outer thread?
-                else if (tend - tbegin <= stride) {
+            // Nested parallel.
+            else {
+
+                // Number of outer threads.
+                idx_t nthr0 = yask_num_threads[0];
+                assert(nthr0 > 0);
+                omp_set_num_threads(nthr0);
+
+                // Outer parallel region.
+                #pragma omp parallel
+                {
+                    idx_t n0 = omp_get_thread_num();
+
+                    // Calculate begin and end points for this thread.
+                    idx_t tbegin = div_equally_cumu_size_n(niter, nthr0, n0 - 1) * stride;
+                    idx_t tend = div_equally_cumu_size_n(niter, nthr0, n0) * stride;
+                    tend = std::min(tend, end);
+
                     #ifdef DEBUG_PAR_FOR
                     #pragma omp critical
-                    std::cout << "** issuing in outer thread due to size\n";
+                    std::cout << "** outer thread " << n0 << ": [" << tbegin << "..." << tend << ") by " <<
+                        stride << "\n" << std::flush;
                     #endif
-                    visitor(tbegin, tend, n0);
-                }
+                    assert(tend >= tbegin);
 
-                // Use nested threads.
-                else {
-
-                    // Set number of threads for the nested OMP loop.
-                    // (Doesn't seem to work w/g++ 8.2.0: just starts 1 nested
-                    // thread if nthr0 > 1.)
-                    idx_t nthr1 = yask_num_threads[1];
-                    assert(nthr1 > 1);
-                    omp_set_num_threads(nthr1);
-
-                    #ifdef DEBUG_PAR_FOR
-                    // Test OMP region w/o for loop.
-                    #pragma omp parallel
-                    {
-                        idx_t n1 = omp_get_thread_num();
-                        idx_t thread_num = n0 * nthr1 + n1;
-                        #pragma omp critical
-                        std::cout << "** thread " << thread_num <<
-                            "(" << n0 << ":" << n1 <<
-                            ")\n" << std::flush;
+                    // Nothing to do in this outer thread?
+                    if (tend <= tbegin) {
                     }
-                    #endif
 
-                    // Inner parallel loop over elements.
-                    #pragma omp parallel for schedule(static)
-                    for (idx_t i = tbegin; i < tend; i += stride) {
-                        idx_t stop = std::min(i + stride, tend);
-                        idx_t n1 = omp_get_thread_num();
-                        idx_t thread_num = n0 * nthr1 + n1;
+                    // Only need one iter in this outer thread?
+                    else if (tend - tbegin <= stride) {
                         #ifdef DEBUG_PAR_FOR
                         #pragma omp critical
-                        std::cout << "** thread " << thread_num <<
-                            "(" << n0 << ":" << n1 <<
-                            "): [" << i << "..." << stop << ") by " <<
-                            stride << "\n" << std::flush;
+                        std::cout << "** issuing in outer thread due to size\n";
                         #endif
-                        visitor(i, stop, thread_num);
+                        visitor(tbegin, tend, n0);
+                    }
+
+                    // Use nested threads.
+                    else {
+
+                        // Set number of threads for the nested OMP loop.
+                        // (Doesn't seem to work w/g++ 8.2.0: just starts 1 nested
+                        // thread if nthr0 > 1.)
+                        idx_t nthr1 = yask_num_threads[1];
+                        assert(nthr1 > 1);
+                        omp_set_num_threads(nthr1);
+
+                        #ifdef DEBUG_PAR_FOR
+                        // Test OMP region w/o for loop.
+                        #pragma omp parallel
+                        {
+                            idx_t n1 = omp_get_thread_num();
+                            idx_t thread_num = n0 * nthr1 + n1;
+                            #pragma omp critical
+                            std::cout << "** thread " << thread_num <<
+                                "(" << n0 << ":" << n1 <<
+                                ")\n" << std::flush;
+                        }
+                        #endif
+
+                        // Inner parallel loop over elements.
+                        #pragma omp parallel for schedule(static)
+                        for (idx_t i = tbegin; i < tend; i += stride) {
+                            idx_t stop = std::min(i + stride, tend);
+                            idx_t n1 = omp_get_thread_num();
+                            idx_t thread_num = n0 * nthr1 + n1;
+                            #ifdef DEBUG_PAR_FOR
+                            #pragma omp critical
+                            std::cout << "** thread " << thread_num <<
+                                "(" << n0 << ":" << n1 <<
+                                "): [" << i << "..." << stop << ") by " <<
+                                stride << "\n" << std::flush;
+                            #endif
+                            visitor(i, stop, thread_num);
+                        }
                     }
                 }
             }
+            #endif
         }
-        #endif        
     }
 
     // Sequential version of yask_parallel_for().

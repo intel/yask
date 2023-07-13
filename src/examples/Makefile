@@ -21,25 +21,19 @@
 ## IN THE SOFTWARE.
 ##############################################################################
 
-# Finite-differences coefficients code.
-# Contributed by Jeremy Tillay.
+# Makefile for the YASK example applications.
 
-# Common settings.
-YASK_BASE	?=	$(abspath ../../..)
-include $(YASK_BASE)/src/common/common.mk
+default:
+	$(MAKE) -f wave_eq.mk
+	$(MAKE) -f swe.mk
 
-SOURCES := fd_coeff_test.cpp fd_coeff.cpp 
-CXX := g++
-CFLAGS := -std=c++11 
-INCLUDES := -I.
-LDFLAGS :=
-EXECUTABLE := $(BIN_OUT_DIR)/fd_coeff_test.exe
+help:
+	@echo " "; \
+	echo "Example builds and runs of applications:"; \
+	echo " $(MAKE) -j examples           # Build example applications"; \
+	echo " $(MAKE) -j example-tests      # Build and run example applications"
 
-all: $(EXECUTABLE)
+all-tests: default
+	$(MAKE) -f wave_eq.mk $@
+	$(MAKE) -f swe.mk $@
 
-$(EXECUTABLE):$(SOURCES)
-	$(MKDIR) $(dir $@)
-	$(CXX) $(CFLAGS) -o $(EXECUTABLE) $(SOURCES) $(LDFLAGS) $(LIBS)
-
-clean: 
-	@rm -f $(EXECUTABLE) 

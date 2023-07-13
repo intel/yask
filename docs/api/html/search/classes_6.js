@@ -45,7 +45,8 @@ var searchData=
   ['yc_5fvar_5fproxy_42',['yc_var_proxy',['../classyask_1_1yc__var__proxy.html',1,'yask']]],
   ['yk_5fenv_43',['yk_env',['../classyask_1_1yk__env.html',1,'yask']]],
   ['yk_5ffactory_44',['yk_factory',['../classyask_1_1yk__factory.html',1,'yask']]],
-  ['yk_5fsolution_45',['yk_solution',['../classyask_1_1yk__solution.html',1,'yask']]],
-  ['yk_5fstats_46',['yk_stats',['../classyask_1_1yk__stats.html',1,'yask']]],
-  ['yk_5fvar_47',['yk_var',['../classyask_1_1yk__var.html',1,'yask']]]
+  ['yk_5freduction_5fresult_45',['yk_reduction_result',['../classyask_1_1yk__var_1_1yk__reduction__result.html',1,'yask::yk_var']]],
+  ['yk_5fsolution_46',['yk_solution',['../classyask_1_1yk__solution.html',1,'yask']]],
+  ['yk_5fstats_47',['yk_stats',['../classyask_1_1yk__stats.html',1,'yask']]],
+  ['yk_5fvar_48',['yk_var',['../classyask_1_1yk__var.html',1,'yask']]]
 ];

@@ -123,30 +123,6 @@ typedef std::uint64_t bit_mask_t;
 
 #endif
 
-// Conditional inlining
-#if !defined(NO_INLINE) && !defined(CHECK)
-#ifndef ALWAYS_INLINE
-#define ALWAYS_INLINE __attribute__((always_inline)) inline
-#endif
-#ifndef FORCE_INLINE
-#define FORCE_INLINE _Pragma("forceinline")
-#endif
-#ifndef FORCE_INLINE_RECURSIVE
-#define FORCE_INLINE_RECURSIVE _Pragma("forceinline recursive")
-#endif
-
-#else
-#ifndef ALWAYS_INLINE
-#define ALWAYS_INLINE inline
-#endif
-#ifndef FORCE_INLINE
-#define FORCE_INLINE
-#endif
-#ifndef FORCE_INLINE_RECURSIVE
-#define FORCE_INLINE_RECURSIVE
-#endif
-#endif
-
 // Vector pragmas supported by classic and LLVM-based Intel compilers.
 #ifndef NO_PRAGMA_VEC1
 #define _NO_VECTOR _Pragma("novector")

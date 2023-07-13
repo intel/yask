@@ -150,7 +150,7 @@ struct MySettings {
 
     // Parse options from the command-line and set corresponding vars.
     // Exit with message on error or request for help.
-    void parse(int argc, char** argv, yk_solution_ptr ksoln) {
+    void parse(int argc, char** argv, yk_env_ptr kenv, yk_solution_ptr ksoln) {
         string pgm_name(argv[0]);
 
         // Parse 'args' and 'argv' cmd-line options, which sets option values.
@@ -192,7 +192,10 @@ struct MySettings {
                     " " << pgm_name << " -g 512" << exnr << "  # number of ranks in each dim.\n" <<
                     " " << pgm_name << " -g 512" << exb << " -no-pre_auto_tune  # manual block size.\n" <<
                     flush;
-                exit_yask(1);
+                if (kenv)
+                    kenv->exit(1);
+                else
+                    exit(1);
             }
 
             // Add settings.
@@ -251,6 +254,7 @@ int main(int argc, char** argv)
         div_line += "\u2500";
     div_line += "\n";
 
+    yk_env_ptr kenv;
     try {
         // Bootstrap factory from kernel API.
         yk_factory kfac;
@@ -258,11 +262,11 @@ int main(int argc, char** argv)
         // Parse only custom options just to get vars needed to set up env.
         // Ignore YASK library options for now.
         MySettings opts;
-        opts.parse(argc, argv, nullptr);
+        opts.parse(argc, argv, nullptr, nullptr);
         yk_env::set_trace_enabled(opts.do_trace);
 
         // Set up the environment.
-        auto kenv = kfac.new_env();
+        kenv = kfac.new_env();
         auto num_ranks = kenv->get_num_ranks();
 
         // Enable debug only on requested rank.
@@ -275,7 +279,7 @@ int main(int argc, char** argv)
 
         // Parse custom and library-provided cmd-line options and
         // exit on -help or error.
-        opts.parse(argc, argv, ksoln);
+        opts.parse(argc, argv, kenv, ksoln);
 
         // Make sure any MPI/OMP debug data is dumped from all ranks before continuing
         // and check option consistency.
@@ -569,7 +573,7 @@ int main(int argc, char** argv)
             assert(_ref_context.get());
 
             // Reapply cmd-line options to override default settings.
-            opts.parse(argc, argv, ref_soln);
+            opts.parse(argc, argv, kenv, ref_soln);
 
             // Change some settings.
             _ref_context->name += "-reference";
@@ -644,14 +648,17 @@ int main(int argc, char** argv)
 
         os << "Stencil '" << ksoln->get_description() << "'.\n";
         if (!ok)
-            exit_yask(1);
+            kenv->exit(1);
 
         kenv->finalize();
         os << "YASK DONE." << endl << div_line << flush;
     }
     catch (yask_exception& e) {
         cerr << "YASK Kernel: " << e.get_message() << ".\n";
-        exit_yask(1);
+        if (kenv)
+            kenv->exit(1);
+        else
+            exit(1);
     }
 
     return 0;

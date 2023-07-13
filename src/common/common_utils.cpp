@@ -44,7 +44,7 @@ namespace yask {
     // for numbers above 9 (at least up to 99).
 
     // Format: "major.minor.patch[-alpha|-beta]".
-    const string version = "4.03.00";
+    const string version = "4.04.00";
 
     string yask_get_version_string() {
         return version;
@@ -91,7 +91,7 @@ namespace yask {
     // Return num with SI multiplier, e.g. "3.14M".
     // Use this one for rates, etc.
     string make_num_str(idx_t num) {
-        if (!is_suffix_print_enabled || (num >= 0 && num < 1000))
+        if (!is_suffix_print_enabled || (num > -1000 && num < 1000))
             return to_string(num);
         return make_num_str(double(num));
     }
@@ -114,34 +114,37 @@ namespace yask {
         const double onep = 1e-12;
         const double onef = 1e-15;
 #endif
+        double absnum = abs(num);
+        if (num < 0.)
+            os << "-";
         if (num == 0.)
             os << num;
-        else if (num > one_e)
-            os << (num / one_e) << "E";
-        else if (num > one_p)
-            os << (num / one_p) << "P";
-        else if (num > one_t)
-            os << (num / one_t) << "T";
-        else if (num > one_g)
-            os << (num / one_g) << "G";
-        else if (num > one_m)
-            os << (num / one_m) << "M";
-        else if (num > one_k)
-            os << (num / one_k) << "K"; // NB: official SI symbol is "k".
+        else if (absnum > one_e)
+            os << (absnum / one_e) << "E";
+        else if (absnum > one_p)
+            os << (absnum / one_p) << "P";
+        else if (absnum > one_t)
+            os << (absnum / one_t) << "T";
+        else if (absnum > one_g)
+            os << (absnum / one_g) << "G";
+        else if (absnum > one_m)
+            os << (absnum / one_m) << "M";
+        else if (absnum > one_k)
+            os << (absnum / one_k) << "K"; // NB: official SI symbol is "k".
 #ifdef USE_PICO
-        else if (num < onep)
-            os << (num / onef) << "f";
-        else if (num < onen)
-            os << (num / onep) << "p";
+        else if (absnum < onep)
+            os << (absnum / onef) << "f";
+        else if (absnum < onen)
+            os << (absnum / onep) << "p";
 #endif
-        else if (num < oneu)
-            os << (num / onen) << "n";
-        else if (num < onem)
-            os << (num / oneu) << "u"; // NB: official SI symbol is Greek mu.
-        else if (num < 1.)
-            os << (num / onem) << "m";
+        else if (absnum < oneu)
+            os << (absnum / onen) << "n";
+        else if (absnum < onem)
+            os << (absnum / oneu) << "u"; // NB: official SI symbol is Greek mu.
+        else if (absnum < 1.)
+            os << (absnum / onem) << "m";
         else
-            os << num;
+            os << absnum;
         return os.str();
     }
 

@@ -118,7 +118,7 @@ namespace yask {
 
            For custom code using the YASK compiler library but not
            the YASK compiler utility, calling define() is possible but optional.
-         */
+        */
         virtual void
         define();
 
@@ -231,11 +231,11 @@ namespace yask {
 
     /// Convenience macro for creating a yask::yc_var_proxy for an n-dimensional YASK variable.
     /*** Example: `MAKE_VAR(pressure, t, x, y, z)` */
-    #define MAKE_VAR(var_name, ...) \
+    #define MAKE_VAR(var_name, ...)                                     \
         yc_var_proxy var_name = yc_var_proxy(#var_name, get_soln(), { __VA_ARGS__ }, false)
     
     /// Convenience macro for creating a yask::yc_var_proxy for an n-dimensional YASK scratch variable.
-    #define MAKE_SCRATCH_VAR(var_name, ...) \
+    #define MAKE_SCRATCH_VAR(var_name, ...)                             \
         yc_var_proxy var_name = yc_var_proxy(#var_name, get_soln(), { __VA_ARGS__ }, true)
     
     /// Convenience macro for creating a yask::yc_var_proxy for a scalar YASK variable.
@@ -243,7 +243,7 @@ namespace yask {
 
     /// Convenience macro for declaring an object of a type derived from \ref yask::yc_solution_base
     // and registering it in the list used by the YASK compiler binary.
-    #define REGISTER_SOLUTION(class_name)                       \
+    #define REGISTER_SOLUTION(class_name)               \
         static class_name class_name ## _instance
     
     /** @}*/

@@ -145,6 +145,8 @@ namespace yask {
                                   // that compiler treats them as local.
                                   const T v = val;
                                   T* RESTRICT e = elems;
+
+                                  #pragma omp simd
                                   for (idx_t i = start; i < stop; i++)
                                       e[i] = v;
                               });
@@ -174,6 +176,7 @@ namespace yask {
                                   T* RESTRICT e = elems;
                                   const T s = seed;
                                   
+                                  #pragma omp simd
                                   for (idx_t i = start; i < stop; i++)
                                       e[i] = s * T(imod_flr(i, wrap) + 1);
                               });

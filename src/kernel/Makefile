@@ -27,16 +27,14 @@
 # See top-level YASK Makefile for explanation of vars commonly set via the
 # command-line that control kernel configuration and performance.
 
-# Initial defaults.
-# These can be overridden on the 'make' command-line.
-stencil			?=	iso3dfd
-omp			?=	1
-mpi			?=	1
-offload			?=	0
-offload_arch		?=	spir64
-numa			?=	1
+# Common settings.
+YASK_BASE	?=	$(abspath ../..)
+include $(YASK_BASE)/src/common/common.mk
 
-real_bytes		?=	4
+# Initial default settings for the YASK kernel library.
+# These can be overridden on the 'make' command-line.
+# See src/common/common.mk for more setting vars.
+numa			?=	1
 allow_new_var_types	?=	1
 streaming_stores	?=	0
 use_rcp			?=	0
@@ -46,7 +44,6 @@ outer_domain_layout	?=	0
 inner_misc_layout 	?=	1
 early_loads		?=	0
 min_buffer_len		?=	1
-
 trace			?=	0
 trace_mem		?=	0
 check			?=	0
@@ -55,36 +52,6 @@ check			?=	0
 # run-time option.  Including the "trace" code has a small impact on
 # binary size and performance, even if not used. Including the "trace_mem"
 # code has a large impact, even if not used.
-
-# If 'arch' isn't set, determine default architecture by running kernel
-# script w/special knob.
-# (Do not assume 'yask.sh' has been installed in $(BIN_OUT_DIR) yet.)
-arch			?=	$(shell $(BASH) ./yask.sh -show_arch)
-
-# Set 'TARGET' from 'arch', converting codenames and other aliases to ISA names.
-# 'TARGET' is the canonical target name.
-# The possible values must agree with those in the APIs and YASK compiler.
-ifneq ($(filter $(arch),avx snb ivb),)
-  TARGET		:=	avx
-else ifneq ($(filter $(arch),avx2 hsw bdw),)
-  TARGET		:=	avx2
-else ifneq ($(filter $(arch),avx512-ymm avx512lo),)
-  TARGET		:=	avx512-ymm
-else ifneq ($(filter $(arch),avx512 avx512-zmm avx512hi avx512f skx skl clx icx spr),)
-  TARGET		:=	avx512
-else ifneq ($(filter $(arch),knl),)
-  TARGET		:=	knl
-else ifneq ($(filter $(arch),intel64 cpp),)
-  TARGET		:=	intel64
-else
-  $(error Target not recognized; use arch=avx512, avx512-ymm, avx2, avx, knl, or intel64)
-endif
-
-# Enable offload if offload with unified shared mem is enabled.
-offload_usm		?=	0
-ifeq ($(offload_usm),1)
- offload		:=	1
-endif
 
 # YASK compiler settings for offload.
 ifeq ($(offload),1)
@@ -95,22 +62,16 @@ ifeq ($(offload),1)
  outer_domain_layout	:=	1
 endif
 
-# Main vars for naming the libraries and executables and running
-# the YASK compiler.
+# Main vars for running the YASK compiler.
 # Set the following vars on 'make' cmd-line for corresponding effects:
-# - YK_STENCIL and/or YK_ARCH to name libraries and executables differently.
 # - YC_STENCIL to override stencil name passed to YASK compiler.
 # - YC_TARGET to override target passed to YASK compiler.
-YK_STENCIL	?=	$(stencil)$(YK_STENCIL_SUFFIX)
 YC_STENCIL	?=	$(stencil)
 ifeq ($(offload),1)
-  YK_ARCH	:=	$(arch).offload-$(offload_arch)
   YC_TARGET	?=	intel64
 else
-  YK_ARCH	:=	$(arch)
   YC_TARGET	?=	$(TARGET)
 endif
-YK_TAG  	:=	$(YK_STENCIL).$(YK_ARCH)
 
 # Default settings based on target.
 ifeq ($(TARGET),knl)
@@ -168,10 +129,6 @@ else
 $(error Internal error: arch lists in Makefile are not consistent)
 
 endif # arch-specific.
-
-# Common settings.
-YASK_BASE	?=	$(abspath ../..)
-include $(YASK_BASE)/src/common/common.mk
 
 # The remainder of this file specifies how to build and test the kernel.
 # Vars starting with 'YC_' apply to the stencil compiler.
@@ -239,10 +196,6 @@ else
  YC_FLAGS	+=	-no-early-loads
 endif
 
-# Kernel base names.
-YK_BASE		:=	yask_kernel
-YK_PY_MOD_BASE	:=	$(YK_BASE)
-
 # Kernel input dirs.
 YK_SWIG_DIR	:=	$(abspath ./swig)
 YK_LIB_SRC_DIR	:=	$(abspath ./lib)
@@ -257,7 +210,6 @@ YK_ARCH_DIR	:=	$(YK_OUT_DIR)/$(YK_ARCH)
 YK_OBJ_DIR	:=	$(YK_ARCH_DIR)/obj
 
 # Dirs for stencil-specific output files.
-YK_EXT_BASE	:=	$(YK_BASE).$(YK_TAG)
 YK_EXT_OUT_DIR	:=	$(YK_OUT_DIR)/$(YK_EXT_BASE)
 YK_SWIG_OUT_DIR	:=	$(YK_EXT_OUT_DIR)/swig
 YK_EXT_OBJ_DIR	:=	$(YK_EXT_OUT_DIR)/obj
@@ -266,7 +218,7 @@ YK_GEN_DIR	:=	$(YK_EXT_OUT_DIR)/gen
 # Kernel files.
 YK_EXEC		:=	$(BIN_OUT_DIR)/$(YK_EXT_BASE).exe
 YK_SCRIPT	:=	$(BIN_OUT_DIR)/yask.sh
-YK_LIB		:=	$(LIB_OUT_DIR)/lib$(YK_EXT_BASE)$(SO_SUFFIX)
+YK_PY_MOD_BASE	:=	$(YK_BASE)
 YK_PY_LIB	:=	$(PY_OUT_DIR)/_$(YK_PY_MOD_BASE)$(SO_SUFFIX)
 YK_PY_MOD	:=	$(PY_OUT_DIR)/$(YK_PY_MOD_BASE).py
 YK_COMM_SRC_NAMES :=
@@ -312,24 +264,17 @@ VIEW_ASM	:=	$(UTILS_BIN_DIR)/view_asm.pl
 
 # Run knobs
 YK_SCRIPT_FLAGS	+= "-stencil" $(YK_STENCIL) "-arch" $(YK_ARCH)
+ifeq ($(mpi),0)
+ YK_SCRIPT_FLAGS += 	-ranks 1
+endif
 
-# Compiler and default flags.
-YK_CXX		:=	$(CXX)
-MPI_CXX 	:=	mpiicpc
-YK_CXXOPT	?=	-O3
-YK_CXXDBG	?=	-g
-YK_CXXFLAGS	:=
-YK_CXXFLAGS_API	:=	-std=c++17
-YK_CXXWARN	:=	-Wall
+# Additional flags for building kernel lib.
+# These are not used for building apps that use only the APIs.
+YK_CXXFLAGS2	:=	$(YK_CXXFLAGS)
 SWIG_CXXFLAGS	:= 	$(DBL_EPSILON_CXXFLAG)
 YK_SO_FLAGS	:=	-shared -fPIC
 OMPFLAG 	:=	-fopenmp
 YK_CXX_INCFLAGS		:=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
-YK_CXX_INCFLAGS_API	:=	$(addprefix -I,$(INC_DIR))
-
-# Linker flags.
-YK_LIBS		:=	-lrt
-YK_LFLAGS	:=	-Wl,-rpath=$(LIB_OUT_DIR) -L$(LIB_OUT_DIR) -l$(YK_EXT_BASE)
 
 # Add options for NUMA.
 ifeq ($(numa),1)
@@ -373,7 +318,7 @@ MACROS		+=	ALLOW_NEW_VARS=$(allow_new_var_types)
 ifeq ($(vtune),1)
  MACROS		+=	USE_VTUNE
  VTUNE_GENERIC_DIR	:=	/opt/intel/vtune_profiler
- YK_CXXFLAGS	+=	-I$(VTUNE_GENERIC_DIR)/include
+ YK_CXXFLAGS2	+=	-I$(VTUNE_GENERIC_DIR)/include
  YK_LIBS	+=	-L$(VTUNE_GENERIC_DIR)/lib64
  ifneq ($(VTUNE_PROFILER_DIR),)
   VTUNE_DIR	:=	$(VTUNE_PROFILER_DIR)
@@ -391,7 +336,7 @@ ifeq ($(vtune),1)
   VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_XE_2016_DIR)
  endif
  ifneq ($(VTUNE_DIR),)
-  YK_CXXFLAGS	+=	-I$(VTUNE_DIR)/include
+  YK_CXXFLAGS2	+=	-I$(VTUNE_DIR)/include
   YK_LIBS	+=	-L$(VTUNE_DIR)/lib64
  endif
  YK_LIBS	+=	-littnotify
@@ -402,7 +347,7 @@ endif
 
 # Create a compiler invocation to test for macro settings.
 # Use the flags defined so far.
-YK_CXX_TEST 	:= 	$(YK_CXX) $(YK_CXXFLAGS_API) $(EXTRA_YK_CXXFLAGS)
+YK_CXX_TEST 	:= 	$(YK_CXX) $(YK_CXXFLAGS)
 cxx_is_llvm_intel :=	$(call MACRO_DEF,$(YK_CXX_TEST),__INTEL_LLVM_COMPILER)
 cxx_is_clang	:=	$(call MACRO_DEF,$(YK_CXX_TEST),__clang__)
 cxx_is_intel	:=	$(call MACRO_DEF,$(YK_CXX_TEST),__INTEL_COMPILER)
@@ -410,14 +355,14 @@ cxx_is_gnu	:= 	$(call MACRO_DEF,$(YK_CXX_TEST),__GNUC__)
 
 # LLVM-based Intel compiler (icpx).
 ifeq ($(cxx_is_llvm_intel),1)
- YK_CXXFLAGS	+=	$(GXX_ISA) $(ICC_ISA)
+ YK_CXXFLAGS2	+=	$(GXX_ISA) $(ICC_ISA)
  ifeq ($(check),0)
-  YK_CXXDBG	+=	-gline-tables-only
+  YK_CXXDBG2	+=	-gline-tables-only
  endif
- YK_CXXDBG	+=	-fdebug-info-for-profiling
- YK_CXXFLAGS	+=	-ansi-alias \
+ YK_CXXDBG2	+=	-fdebug-info-for-profiling
+ YK_CXXFLAGS2	+=	-ansi-alias \
 			-fimf-precision=low -fp-model fast -fimf-domain-exclusion=none -fma
- YK_CXXWARN	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable \
+ YK_CXXWARN2	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable \
 			-Wno-unused-const-variable -fno-color-diagnostics
  OMPFLAG	:=	-fiopenmp
  SWIG_CXXFLAGS	+=	-Wno-deprecated-declarations
@@ -426,33 +371,33 @@ ifeq ($(cxx_is_llvm_intel),1)
 
 # Clang compiler (clang++, not Intel version).
 else ifeq ($(cxx_is_clang),1)
- YK_CXXFLAGS	+=	$(GXX_ISA)
- YK_CXXWARN	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable \
+ YK_CXXFLAGS2	+=	$(GXX_ISA)
+ YK_CXXWARN2	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable \
 			-Wno-unused-const-variable -fno-color-diagnostics
  VEC_MACROS	+=	NO_SVML NO_PRAGMA_VEC2
 
 # Classic Intel compiler (icpc, not LLVM-based).
 else ifeq ($(cxx_is_intel),1)
 
- YK_CXXFLAGS	+=	$(ICC_ISA)
- YK_CXXDBG	+=	-debug extended
- YK_CXXFLAGS	+=	-restrict -ansi-alias -fno-alias \
+ YK_CXXFLAGS2	+=	$(ICC_ISA)
+ YK_CXXDBG2	+=	-debug extended
+ YK_CXXFLAGS2	+=	-restrict -ansi-alias -fno-alias \
 			-fimf-use-svml=true -fimf-precision=low -fast-transcendentals \
 			-no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -ftz \
 			-fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
- YK_CXXFLAGS	+=	-no-diag-message-catalog
- YK_CXXFLAGS	+=	-vec-threshold0
- #YK_CXXFLAGS	+=	-qoverride-limits
- #YK_CXXFLAGS	+=	-Fa
- #YK_CXXFLAGS	+=	-qopt-report=5
- #YK_CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
+ YK_CXXFLAGS2	+=	-no-diag-message-catalog
+ YK_CXXFLAGS2	+=	-vec-threshold0
+ #YK_CXXFLAGS2	+=	-qoverride-limits
+ #YK_CXXFLAGS2	+=	-Fa
+ #YK_CXXFLAGS2	+=	-qopt-report=5
+ #YK_CXXFLAGS2	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
  YK_CXX_VER_CMD :=	$(YK_CXX) -V
  OMPFLAG	:=	-qopenmp
 
 # Gnu-compatible compiler (g++, not Intel or LLVM).
 else ifeq ($(cxx_is_gnu),1)
- YK_CXXFLAGS	+=	$(GXX_ISA)
- YK_CXXWARN	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
+ YK_CXXFLAGS2	+=	$(GXX_ISA)
+ YK_CXXWARN2	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
  SWIG_CXXFLAGS	+=	$(SWIG_GCCFLAGS)
  VEC_MACROS	+=	NO_SVML
 
@@ -476,22 +421,11 @@ ifeq ($(offload),1)
   MACROS	+=	USE_OFFLOAD_X86
  endif
  OMPFLAGS	+=	-fopenmp-targets=$(offload_arch)
- CXX_PREFIX	:=
 else
  MACROS		+=	$(VEC_MACROS)
 endif
 ifeq ($(offload_usm),1)
  MACROS		+=	USE_OFFLOAD_USM
-endif
-
-# Add options for MPI.
-# MPI settings.
-ifeq ($(mpi),1)
- YK_CXXCMD	:=	$(MPI_CXX) -cxx=$(YK_CXX)
- MACROS		+=	USE_MPI
-else
- YK_CXXCMD	:=	$(YK_CXX)
- YK_SCRIPT_FLAGS += -ranks 1
 endif
 
 # Compile with model_cache=1 or 2 to check prefetching.
@@ -507,8 +441,7 @@ endif
 
 # Add in final flags and user-added flags.
 YK_MACROS	:=	$(addprefix -D,$(MACROS) $(subst $(comma),$(space),$(EXTRA_MACROS)))
-YK_CXXFLAGS_API	+=	$(YK_CXXDBG) $(YK_CXXOPT) $(YK_CXXWARN) $(YK_CXX_INCFLAGS_API) $(EXTRA_YK_CXXFLAGS)
-YK_CXXFLAGS	+=	$(OMPFLAGS) $(YK_MACROS) $(YK_CXX_INCFLAGS) $(YK_CXXFLAGS_API)
+YK_CXXFLAGS2	+=	$(YK_CXXDBG2) $(YK_CXXOPT2) $(YK_CXXWARN2) $(OMPFLAGS) $(YK_MACROS) $(YK_CXX_INCFLAGS)
 YK_LIBS		+=	$(EXTRA_YK_LIBS)
 
 # Number of stencil/var dims extracted from YASK compiler output.
@@ -607,12 +540,12 @@ VPATH	:=	$(patsubst $space,$colon,$(COMM_DIR) $(COEFF_DIR) $(YK_LIB_SRC_DIR))
 # Compile rules.
 $(YK_OBJ_DIR)/%.o: %.cpp $(YK_INC_GLOB)
 	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS2) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YK_EXT_OBJ_DIR)/%.o: %.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
 	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS2) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
 # C++-preprocessor rule.
@@ -634,12 +567,14 @@ kernel: $(YK_EXEC) $(YK_SCRIPT) $(MAKE_REPORT_FILE)
 
 $(YK_LIB): $(YK_OBJS) $(YK_EXT_OBJS)
 	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $(YK_SO_FLAGS) -o $@ $^ $(YK_LIBS)
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS2) $(YK_SO_FLAGS) $^ $(YK_LIBS) -o $@
 	@ls -l $@
 
+# Currently, the kernel test utility requires internal code access.
+# TODO: recode to use only APIs and switch to use API compile flags.
 $(YK_EXEC): yask_main.cpp $(YK_LIB)
 	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS2) $< $(YK_LFLAGS) $(YK_LIBS) -o $@
 	@ls -l $@
 
 $(YK_SCRIPT): ./yask.sh
@@ -742,12 +677,12 @@ $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*
 
 $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp
 	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ $(SWIG_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS2) -x c++ $(SWIG_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YK_PY_LIB): $(YK_OBJS)  $(YK_EXT_OBJS) $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.o
 	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $(YK_SO_FLAGS) -o $@ $^ $(YK_LIBS)
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS2) $(YK_SO_FLAGS) -o $@ $^ $(YK_LIBS)
 	@ls -l $@
 
 ######## Misc targets
@@ -811,9 +746,13 @@ echo-settings:
 	echo YK_CXX=$(YK_CXX); \
 	echo YK_CXXCMD=$(YK_CXXCMD); \
 	echo YK_CXXDBG=$(YK_CXXDBG); \
-	echo YK_CXXFLAGS="\"$(YK_CXXFLAGS)\""; \
-	echo YK_CXXFLAGS_API="\"$(YK_CXXFLAGS_API)\""; \
 	echo YK_CXXOPT=$(YK_CXXOPT); \
+	echo YK_CXXWARN=$(YK_CXXWARN); \
+	echo YK_CXXFLAGS="\"$(YK_CXXFLAGS)\""; \
+	echo YK_CXXDBG2=$(YK_CXXDBG2); \
+	echo YK_CXXOPT2=$(YK_CXXOPT2); \
+	echo YK_CXXWARN2=$(YK_CXXWARN2); \
+	echo YK_CXXFLAGS2="\"$(YK_CXXFLAGS2)\""; \
 	echo YK_EXT_TAG=$(YK_EXT_TAG); \
 	echo YK_STENCIL=$(YK_STENCIL); \
 	echo YK_TAG=$(YK_TAG); \
@@ -863,7 +802,7 @@ echo-settings:
 # Print stats on inner SIMD loops from asm file.
 code-stats: $(YK_LIB)
 	$(call MK_DIR,$(YK_OBJ_DIR))
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -S -o $(YK_OBJ_DIR)/factory.s $(YK_LIB_SRC_DIR)/factory.cpp
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS2) -x c++ -S -o $(YK_OBJ_DIR)/factory.s $(YK_LIB_SRC_DIR)/factory.cpp
 	@echo "Code stats for stencil computation:"
 	$(PERL) $(VIEW_ASM) -p -l -f='calc_' $(YK_OBJ_DIR)/factory.s
 
@@ -911,15 +850,6 @@ help:
 #################################
 # TODO: convert all testing to a separate test framework.
 
-# Default number of ranks for running tests.
-# 4 is good because it tests in-plane diagonal exchanges for 2D and 3D tests.
-# 8 would test all exchanges for 3D tests.
-ifneq ($(mpi),1)
-ranks	:=	1
-else
-ranks	:=	4
-endif
-
 # Default min & max test number to run.
 first_test	:=	0
 last_test	:=	999
@@ -949,7 +879,7 @@ endif
 
 $(YK_OMP_TEST_EXEC): $(YK_TEST_SRC_DIR)/openmp_test.cpp
 	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< -o $@ $(YK_LIBS)
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS2) $< -o $@ $(YK_LIBS)
 	@ls -l $@
 
 cxx-yk-omp-test:
@@ -960,7 +890,7 @@ cxx-yk-omp-test:
 
 $(YK_VAR_TEST_EXEC): $(YK_TEST_SRC_DIR)/var_test.cpp $(YK_LIB)
 	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS2) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@
 
 cxx-yk-var-test:
@@ -974,7 +904,7 @@ cxx-yk-var-test:
 # Build C++ kernel tests.
 $(YK_API_TEST_EXEC): $(YK_TEST_SRC_DIR)/yask_kernel_api_test.cpp $(YK_LIB)
 	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS_API) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@
 
 # Build and run C++ tests.
@@ -995,7 +925,7 @@ py-yk-api-test: $(YK_TEST_SRC_DIR)/yask_kernel_api_test.py $(YK_PY_LIB)
 # Build C++ kernel tests with exceptions.
 $(YK_API_TEST_EXEC_WITH_EXCEPTION): $(YK_TEST_SRC_DIR)/yask_kernel_api_exception_test.cpp $(YK_LIB)
 	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS_API) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@
 
 # Run C++ tests with exceptions.

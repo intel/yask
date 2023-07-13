@@ -36,6 +36,27 @@ namespace yask {
 
     ////// MPI utils //////
 
+    // Exit properly.
+    void KernelEnv::exit(int code) {
+
+#ifdef USE_MPI
+        if (code == 0)
+            finalize();
+
+        else {
+            int flag;
+            MPI_Initialized(&flag);
+            if (flag) {
+                int num_ranks = 1;
+                MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
+                if (num_ranks > 1)
+                    MPI_Abort(MPI_COMM_WORLD, code);
+            }
+        }
+#endif
+        ::exit(code);
+    }
+    
     void KernelEnv::finalize() {
         TRACE_MSG("finalize_needed = " << finalize_needed);
         if (comm != MPI_COMM_NULL && finalize_needed) {

@@ -106,15 +106,11 @@ namespace yask {
         // micro-block size.
         update_scratch_var_info(scratch_var_idx, rank_idxs.begin);
 
-        // Doing all parts.
-        MpiSection mpisec(this);
-        mpisec.init();
-        
         // Initial halo exchange.
         // TODO: get rid of all halo exchanges in this function,
         // and calculate overall problem in all ranks, then
         // compare relevant pieces in each rank.
-        exchange_halos(mpisec);
+        exchange_halos();
 
         // Number of iterations to get from begin_t, stopping before end_t,
         // jumping by stride_t.
@@ -149,7 +145,7 @@ namespace yask {
                 }
 
                 // Exchange all dirty halos.
-                exchange_halos(mpisec);
+                exchange_halos();
 
                 // Find the parts that need to be processed.
                 // This will be the prerequisite scratch-var
@@ -211,7 +207,7 @@ namespace yask {
         steps_done += abs(end_t - begin_t);
 
         // Final halo exchange.
-        exchange_halos(mpisec);
+        exchange_halos();
 
         run_time.stop();
 

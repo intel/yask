@@ -482,7 +482,7 @@ namespace yask {
     */
     class yc_not_greater_than_node : public virtual yc_binary_comparison_node { };
 
-#ifndef SWIG
+    #ifndef SWIG
     /// Arguments that may be YASK numeric pointer types.
     /**
        A simple wrapper class to provide automatic construction of a
@@ -601,7 +601,7 @@ namespace yask {
         yc_number_any_arg(std::nullptr_t p) :
             yc_number_node_ptr(p) { }
     };
-#endif
+    #endif
     
     /// Factory to create AST nodes.
     /** @note Var-point reference nodes are created from a \ref yc_var object
@@ -687,7 +687,7 @@ namespace yask {
                           /**< [in] Optional expression defining sub-domain
                              where `lhs EQUALS rhs` is valid. */ ) const;
 
-#ifndef SWIG
+        #ifndef SWIG
         /// Create a numerical-value expression node.
         /**
            A generic method to create a pointer to a numerical expression
@@ -699,7 +699,7 @@ namespace yask {
                         /**< [in] Argument to convert to a numerical expression. */) const {
             return std::move(arg);
         }
-#endif
+        #endif
         
         /// Create a constant numerical-value node.
         /**
@@ -917,8 +917,8 @@ namespace yask {
     };
 
     /// Unary math functions. Used internally to define sqrt(), sin(), etc.
-#define UNARY_MATH_EXPR(fn_name) \
-    yc_number_node_ptr fn_name(const yc_number_node_ptr rhs)
+    #define UNARY_MATH_EXPR(fn_name)                                    \
+        yc_number_node_ptr fn_name(const yc_number_node_ptr rhs)
 
     /// Create an expression node to calculate the square-root of the argument node.
     UNARY_MATH_EXPR(sqrt);
@@ -938,7 +938,7 @@ namespace yask {
     UNARY_MATH_EXPR(cos);
     /// Create an expression node to calculate the arc-tangent of the argument node.
     UNARY_MATH_EXPR(atan);
-#undef UNARY_MATH_EXPR
+    #undef UNARY_MATH_EXPR
 
     /// Binary math functions. Used internally.
     #define BINARY_MATH_EXPR(fn_name)                                   \
@@ -970,7 +970,7 @@ namespace yask {
 
     #undef BINARY_MATH_EXPR
 
-#if !defined SWIG
+    #if !defined SWIG
 
     // Non-class operators.
     // These are not defined for SWIG because
@@ -1056,31 +1056,31 @@ namespace yask {
        Const values must be on RHS of operator, e.g., 'x > 5' is ok, but 
        '5 < x' is not.
     */
-#define BOOL_OPER(oper, fn)                                             \
-    inline yc_bool_node_ptr operator oper(const yc_number_node_ptr lhs, const yc_number_node_ptr rhs) { \
-        yc_node_factory nfac; return nfac.fn(lhs, rhs); }               \
-    inline yc_bool_node_ptr operator oper(const yc_number_node_ptr lhs, const yc_index_node_ptr rhs) { \
-        yc_node_factory nfac; return nfac.fn(lhs, rhs); }               \
-    inline yc_bool_node_ptr operator oper(const yc_number_node_ptr lhs, const yc_var_point_node_ptr rhs) { \
-        yc_node_factory nfac; return nfac.fn(lhs, rhs); }               \
-    inline yc_bool_node_ptr operator oper(const yc_index_node_ptr lhs, const yc_number_node_ptr rhs) { \
-        yc_node_factory nfac; return nfac.fn(lhs, rhs); }               \
-    inline yc_bool_node_ptr operator oper(const yc_index_node_ptr lhs, const yc_index_node_ptr rhs) { \
-        yc_node_factory nfac; return nfac.fn(lhs, rhs); }               \
-    inline yc_bool_node_ptr operator oper(const yc_index_node_ptr lhs, const yc_var_point_node_ptr rhs) { \
-        yc_node_factory nfac; return nfac.fn(lhs, rhs); }               \
-    inline yc_bool_node_ptr operator oper(const yc_var_point_node_ptr lhs, const yc_number_node_ptr rhs) { \
-        yc_node_factory nfac; return nfac.fn(lhs, rhs); }               \
-    inline yc_bool_node_ptr operator oper(const yc_var_point_node_ptr lhs, const yc_index_node_ptr rhs) { \
-        yc_node_factory nfac; return nfac.fn(lhs, rhs); }               \
-    inline yc_bool_node_ptr operator oper(const yc_var_point_node_ptr lhs, const yc_var_point_node_ptr rhs) { \
-        yc_node_factory nfac; return nfac.fn(lhs, rhs); }               \
-    inline yc_bool_node_ptr operator oper(const yc_number_node_ptr lhs, double rhs) { \
-        yc_node_factory nfac; return nfac.fn(lhs, nfac.new_number_node(rhs)); } \
-    inline yc_bool_node_ptr operator oper(const yc_index_node_ptr lhs, double rhs) { \
-        yc_node_factory nfac; return nfac.fn(lhs, nfac.new_number_node(rhs)); } \
-    inline yc_bool_node_ptr operator oper(const yc_var_point_node_ptr lhs, double rhs) { \
-        yc_node_factory nfac; return nfac.fn(lhs, nfac.new_number_node(rhs)); }
+    #define BOOL_OPER(oper, fn)                                         \
+        inline yc_bool_node_ptr operator oper(const yc_number_node_ptr lhs, const yc_number_node_ptr rhs) { \
+            yc_node_factory nfac; return nfac.fn(lhs, rhs); }           \
+        inline yc_bool_node_ptr operator oper(const yc_number_node_ptr lhs, const yc_index_node_ptr rhs) { \
+            yc_node_factory nfac; return nfac.fn(lhs, rhs); }           \
+        inline yc_bool_node_ptr operator oper(const yc_number_node_ptr lhs, const yc_var_point_node_ptr rhs) { \
+            yc_node_factory nfac; return nfac.fn(lhs, rhs); }           \
+        inline yc_bool_node_ptr operator oper(const yc_index_node_ptr lhs, const yc_number_node_ptr rhs) { \
+            yc_node_factory nfac; return nfac.fn(lhs, rhs); }           \
+        inline yc_bool_node_ptr operator oper(const yc_index_node_ptr lhs, const yc_index_node_ptr rhs) { \
+            yc_node_factory nfac; return nfac.fn(lhs, rhs); }           \
+        inline yc_bool_node_ptr operator oper(const yc_index_node_ptr lhs, const yc_var_point_node_ptr rhs) { \
+            yc_node_factory nfac; return nfac.fn(lhs, rhs); }           \
+        inline yc_bool_node_ptr operator oper(const yc_var_point_node_ptr lhs, const yc_number_node_ptr rhs) { \
+            yc_node_factory nfac; return nfac.fn(lhs, rhs); }           \
+        inline yc_bool_node_ptr operator oper(const yc_var_point_node_ptr lhs, const yc_index_node_ptr rhs) { \
+            yc_node_factory nfac; return nfac.fn(lhs, rhs); }           \
+        inline yc_bool_node_ptr operator oper(const yc_var_point_node_ptr lhs, const yc_var_point_node_ptr rhs) { \
+            yc_node_factory nfac; return nfac.fn(lhs, rhs); }           \
+        inline yc_bool_node_ptr operator oper(const yc_number_node_ptr lhs, double rhs) { \
+            yc_node_factory nfac; return nfac.fn(lhs, nfac.new_number_node(rhs)); } \
+        inline yc_bool_node_ptr operator oper(const yc_index_node_ptr lhs, double rhs) { \
+            yc_node_factory nfac; return nfac.fn(lhs, nfac.new_number_node(rhs)); } \
+        inline yc_bool_node_ptr operator oper(const yc_var_point_node_ptr lhs, double rhs) { \
+            yc_node_factory nfac; return nfac.fn(lhs, nfac.new_number_node(rhs)); }
 
     BOOL_OPER(==, new_equals_node)
     BOOL_OPER(!=, new_not_equals_node)
@@ -1088,7 +1088,7 @@ namespace yask {
     BOOL_OPER(>, new_greater_than_node)
     BOOL_OPER(<=, new_not_greater_than_node)
     BOOL_OPER(>=, new_not_less_than_node)
-#undef BOOL_OPER
+    #undef BOOL_OPER
 
     /// Recommended macro to make the "equality" operator readable and self-explanatory.
     /**
@@ -1099,7 +1099,7 @@ namespace yask {
        shared pointers.  See
        https://en.cppreference.com/w/cpp/memory/shared_ptr.
     */
-#define EQUALS <<
+    #define EQUALS <<
 
     /// The operator version of yc_node_factory::new_equation_node() used for defining a var-point value.
     yc_equation_node_ptr operator EQUALS(yc_var_point_node_ptr gpp, const yc_number_any_arg rhs);
@@ -1109,7 +1109,7 @@ namespace yask {
        Uses an otherwise unneeded binary operator that has a low priority.
        See http://en.cppreference.com/w/cpp/language/operator_precedence.
     */
-#define IF_DOMAIN ^=
+    #define IF_DOMAIN ^=
 
     /// The operator version of yc_equation_node::set_cond() to add a domain condition.
     yc_equation_node_ptr operator IF_DOMAIN(yc_equation_node_ptr expr,
@@ -1120,13 +1120,13 @@ namespace yask {
        Uses an otherwise unneeded binary operator that has a low priority.
        See http://en.cppreference.com/w/cpp/language/operator_precedence.
     */
-#define IF_STEP |=
+    #define IF_STEP |=
 
     /// The operator version of yc_equation_node::set_step_cond() to add a domain condition.
     yc_equation_node_ptr operator IF_STEP(yc_equation_node_ptr expr,
                                           const yc_bool_node_ptr cond);
 
-#endif  // !SWIG.
+    #endif  // !SWIG.
 
     /** @}*/
 

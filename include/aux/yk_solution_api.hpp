@@ -196,7 +196,7 @@ namespace yask {
         */
         virtual void
         set_rank_domain_size_vec(const idx_t_vec& vals
-                             /**< [in] Elements in all domain dims. */) = 0;
+                                 /**< [in] Elements in all domain dims. */) = 0;
 
         #ifndef SWIG
         /// Set the local-domain size in all domain dimensions.
@@ -205,7 +205,7 @@ namespace yask {
         */
         virtual void
         set_rank_domain_size_vec(const idx_t_init_list& vals
-                             /**< [in] Elements in all domain dims. */) = 0;
+                                 /**< [in] Elements in all domain dims. */) = 0;
         #endif
 
         /// Get the local-domain size in the specified dimension, i.e., the size in this rank.
@@ -355,9 +355,9 @@ namespace yask {
         */
         virtual idx_t
         get_block_size(const std::string& dim
-                        /**< [in] Name of dimension to get.  Must be one of
-                           the names from get_step_dim_name() or
-                           get_domain_dim_names(). */) const =0;
+                       /**< [in] Name of dimension to get.  Must be one of
+                          the names from get_step_dim_name() or
+                          get_domain_dim_names(). */) const =0;
 
         /// Get the block size in all domain dimensions.
         /**
@@ -400,7 +400,7 @@ namespace yask {
  
            @throws yask_exception if no legal values are possible
            given the specified (non-zero) values.
-         */
+        */
         virtual void
         set_num_ranks(const std::string& dim
                       /**< [in] Name of dimension to set.  Must be one of
@@ -459,11 +459,11 @@ namespace yask {
 
            <table>
            <tr><td>MPI rank index = 0, x rank index = 0, y rank index = 0
-               <td>MPI rank index = 1, x rank index = 1, y rank index = 0
+           <td>MPI rank index = 1, x rank index = 1, y rank index = 0
            <tr><td>MPI rank index = 2, x rank index = 0, y rank index = 1
-               <td>MPI rank index = 3, x rank index = 1, y rank index = 1
+           <td>MPI rank index = 3, x rank index = 1, y rank index = 1
            <tr><td>MPI rank index = 4, x rank index = 0, y rank index = 2
-               <td>MPI rank index = 5, x rank index = 1, y rank index = 2
+           <td>MPI rank index = 5, x rank index = 1, y rank index = 2
            </table>
 
            See yk_env::get_num_ranks() and yk_env::get_rank_index() for MPI rank index.
@@ -505,7 +505,7 @@ namespace yask {
         virtual idx_t
         get_rank_index(const std::string& dim
                        /**< [in] Name of dimension to get.  Must be one of
-                         the names from get_domain_dim_names(). */ ) const =0;
+                          the names from get_domain_dim_names(). */ ) const =0;
 
         /// Get the rank index in all domain dimensions.
         /**
@@ -696,30 +696,30 @@ namespace yask {
            The stencil(s) in the solution are applied to the var data, setting the
            index variables as follows:
            1. If temporal tiling is *not* used (the default):
-            - The step index (e.g., `t` for "time") will be sequentially set to values
-            from `first_step_index` to `last_step_index`, inclusive.
-             + If the stencil equations were defined with dependencies on lower-valued steps,
-             e.g., `t+1` depends on `t`, then `last_step_index` should be greater than or equal to
-             `first_step_index` (forward solution).
-             + If the stencil equations were defined with dependencies on higher-valued steps,
-             e.g., `t-1` depends on `t`, then `last_step_index` should be less than or equal to
-             `first_step_index` (reverse solution).
-            - For each step index, the domain indices will be set
-            to values across the entire domain as returned by yk_solution::get_overall_domain_size()
-            (not necessarily sequentially).
-            - MPI halo exchanges will occur as necessary before or during each step.
+           - The step index (e.g., `t` for "time") will be sequentially set to values
+           from `first_step_index` to `last_step_index`, inclusive.
+           + If the stencil equations were defined with dependencies on lower-valued steps,
+           e.g., `t+1` depends on `t`, then `last_step_index` should be greater than or equal to
+           `first_step_index` (forward solution).
+           + If the stencil equations were defined with dependencies on higher-valued steps,
+           e.g., `t-1` depends on `t`, then `last_step_index` should be less than or equal to
+           `first_step_index` (reverse solution).
+           - For each step index, the domain indices will be set
+           to values across the entire domain as returned by yk_solution::get_overall_domain_size()
+           (not necessarily sequentially).
+           - MPI halo exchanges will occur as necessary before or during each step.
            2. **[Advanced]** If temporal wave-front tiling *is* enabled:
-            - The step index (e.g., `t` for "time") will be sequentially set to values
-            from `first_step_index` to `last_step_index`, inclusive, within each area configured
-            for temporal tiling.
-             + The number of steps in an area may also be restricted by the size
-             of the area in the step dimension. 
-             In that case, tiles will be done in temporal slices of that size.
-            - For each step index within each area, the domain indices will be set
-            to values across the entire area (not necessarily sequentially).
-            - Ultimately, the stencil(s) will be applied to same the elements in both the step
-            and domain dimensions as when wave-front tiling is not used.
-            - MPI halo exchanges may occur at less frequent intervals.
+           - The step index (e.g., `t` for "time") will be sequentially set to values
+           from `first_step_index` to `last_step_index`, inclusive, within each area configured
+           for temporal tiling.
+           + The number of steps in an area may also be restricted by the size
+           of the area in the step dimension. 
+           In that case, tiles will be done in temporal slices of that size.
+           - For each step index within each area, the domain indices will be set
+           to values across the entire area (not necessarily sequentially).
+           - Ultimately, the stencil(s) will be applied to same the elements in both the step
+           and domain dimensions as when wave-front tiling is not used.
+           - MPI halo exchanges may occur at less frequent intervals.
 
            This function should be called only *after* calling prepare_solution().
 
@@ -740,7 +740,7 @@ namespace yask {
            \code{.cpp}
            soln->prepare_solution();
            for (idx_t t = 1; t <= num_steps; t++)
-               soln->run_solution(t);
+           soln->run_solution(t);
            soln->end_solution();
            \endcode
 
@@ -791,9 +791,16 @@ namespace yask {
         virtual void
         copy_vars_from_device() const =0;
 
+        /// Force a halo exchange now.
+        /**
+           Can be used to exchange data between ranks before run_solution()
+           is called.
+        */
+        virtual void
+        exchange_halos() =0;
+
         /// Finish using a solution.
         /**
-           Performs a final MPI halo exchange.
            Releases shared ownership of memory used by the vars.  This will
            result in deallocating each memory block that is not
            referenced by another shared pointer.
@@ -986,14 +993,14 @@ namespace yask {
         */
         virtual yk_var_ptr
         new_var(const std::string& name
-                 /**< [in] Name of the var; must be unique
-                    within the solution. */,
-                 const string_vec& dims
-                 /**< [in] List of names of all dimensions.
-                    Names must be valid C++ identifiers and
-                    not repeated within this var. */ ) =0;
+                /**< [in] Name of the var; must be unique
+                   within the solution. */,
+                const string_vec& dims
+                /**< [in] List of names of all dimensions.
+                   Names must be valid C++ identifiers and
+                   not repeated within this var. */ ) =0;
 
-#ifndef SWIG
+        #ifndef SWIG
         /// **[Advanced]** Add a new var to the solution.
         /**
            See documentation for the version of new_var() with a vector of dimension names
@@ -1003,13 +1010,13 @@ namespace yask {
         */
         virtual yk_var_ptr
         new_var(const std::string& name
-                 /**< [in] Name of the var; must be unique
-                    within the solution. */,
-                 const std::initializer_list<std::string>& dims
-                 /**< [in] List of names of all dimensions.
-                    Names must be valid C++ identifiers and
-                    not repeated within this var. */ ) =0;
-#endif
+                /**< [in] Name of the var; must be unique
+                   within the solution. */,
+                const std::initializer_list<std::string>& dims
+                /**< [in] List of names of all dimensions.
+                   Names must be valid C++ identifiers and
+                   not repeated within this var. */ ) =0;
+        #endif
 
         /// **[Advanced]** Add a new var to the solution with a specified size.
         /**
@@ -1061,17 +1068,17 @@ namespace yask {
         */
         virtual yk_var_ptr
         new_fixed_size_var(const std::string& name
-                       /**< [in] Name of the var; must be unique
-                          within the solution. */,
-                       const string_vec& dims
-                       /**< [in] List of names of all dimensions.
-                          Names must be valid C++ identifiers and
-                          not repeated within this var. */,
-                       const idx_t_vec& dim_sizes
-                       /**< [in] Initial allocation in each dimension.
-                          Must be exatly one size for each dimension. */ ) =0;
+                           /**< [in] Name of the var; must be unique
+                              within the solution. */,
+                           const string_vec& dims
+                           /**< [in] List of names of all dimensions.
+                              Names must be valid C++ identifiers and
+                              not repeated within this var. */,
+                           const idx_t_vec& dim_sizes
+                           /**< [in] Initial allocation in each dimension.
+                              Must be exatly one size for each dimension. */ ) =0;
 
-#ifndef SWIG
+        #ifndef SWIG
         /// **[Advanced]** Add a new var to the solution with a specified size.
         /**
            See documentation for the version of new_fixed_size_var() with a vector of dimension names
@@ -1081,16 +1088,16 @@ namespace yask {
         */
         virtual yk_var_ptr
         new_fixed_size_var(const std::string& name
-                       /**< [in] Name of the var; must be unique
-                          within the solution. */,
-                       const std::initializer_list<std::string>& dims
-                       /**< [in] List of names of all dimensions.
-                          Names must be valid C++ identifiers and
-                          not repeated within this var. */,
-                       const idx_t_init_list& dim_sizes
-                       /**< [in] Initial allocation in each dimension.
-                          Must be exatly one size for each dimension. */ ) =0;
-#endif
+                           /**< [in] Name of the var; must be unique
+                              within the solution. */,
+                           const std::initializer_list<std::string>& dims
+                           /**< [in] List of names of all dimensions.
+                              Names must be valid C++ identifiers and
+                              not repeated within this var. */,
+                           const idx_t_init_list& dim_sizes
+                           /**< [in] Initial allocation in each dimension.
+                              Must be exatly one size for each dimension. */ ) =0;
+        #endif
 
         /// **[Advanced]** Set the default preferred NUMA node on which to allocate data.
         /**
@@ -1124,7 +1131,7 @@ namespace yask {
         virtual int
         get_default_numa_preferred() const =0;
 
-#ifndef SWIG
+        #ifndef SWIG
         /// **[Advanced]** Callback type with \ref yk_solution parameter.
         typedef std::function<void(yk_solution&)> hook_fn_t;
         
@@ -1141,7 +1148,7 @@ namespace yask {
            called in the order registered.
 
            @note Not available in the Python API.
-         */
+        */
         virtual void
         call_before_prepare_solution(hook_fn_t hook_fn
                                      /**< [in] callback function */) =0;
@@ -1154,7 +1161,7 @@ namespace yask {
            called in the order registered.
 
            @note Not available in the Python API.
-         */
+        */
         virtual void
         call_after_prepare_solution(hook_fn_t hook_fn
                                     /**< [in] callback function */) =0;
@@ -1169,7 +1176,7 @@ namespace yask {
            called in the order registered.
 
            @note Not available in the Python API.
-         */
+        */
         virtual void
         call_before_run_solution(hook_fn_2idx_t hook_fn
                                  /**< [in] callback function */) =0;
@@ -1184,11 +1191,11 @@ namespace yask {
            called in the order registered.
 
            @note Not available in the Python API.
-         */
+        */
         virtual void
         call_after_run_solution(hook_fn_2idx_t hook_fn
                                 /**< [in] callback function */) =0;
-#endif
+        #endif
         
         /// **[Advanced]** Merge YASK variables with another solution.
         /**
@@ -1198,7 +1205,7 @@ namespace yask {
         */
         virtual void
         fuse_vars(yk_solution_ptr source
-                   /**< [in] Solution from which vars will be merged. */) =0;
+                  /**< [in] Solution from which vars will be merged. */) =0;
 
         /// **[Advanced]** Set whether invalid step indices alias to valid ones.
         virtual void
@@ -1246,7 +1253,7 @@ namespace yask {
             return new_var(name, dims);
         }
 
-#ifndef SWIG
+        #ifndef SWIG
         /// **[Deprecated]** Use new_var().
         YASK_DEPRECATED
         inline yk_var_ptr
@@ -1254,7 +1261,7 @@ namespace yask {
                  const std::initializer_list<std::string>& dims) {
             return new_var(name, dims);
         }
-#endif
+        #endif
 
         /// **[Deprecated]** Use new_fixed_size_var().
         YASK_DEPRECATED
@@ -1265,7 +1272,7 @@ namespace yask {
             return new_fixed_size_var(name, dims, dim_sizes);
         }
 
-#ifndef SWIG
+        #ifndef SWIG
         /// **[Deprecated]** Use new_fixed_size_var().
         YASK_DEPRECATED
         inline yk_var_ptr
@@ -1274,7 +1281,7 @@ namespace yask {
                             const idx_t_vec& dim_sizes) {
             return new_fixed_size_var(name, dims, dim_sizes);
         }
-#endif
+        #endif
         
         /// **[Deprecated]** Use fuse_vars().
         YASK_DEPRECATED

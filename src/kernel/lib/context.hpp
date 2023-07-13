@@ -526,6 +526,7 @@ namespace yask {
 
         // Exchange all dirty halo data for all stencil parts.
         void exchange_halos(MpiSection& mpisec);
+        virtual void exchange_halos();
 
         // Call MPI_Test() on all unfinished requests to advance MPI progress.
         void adv_halo_exchange();

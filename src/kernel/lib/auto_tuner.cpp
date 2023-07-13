@@ -445,7 +445,6 @@ namespace yask {
             *targetp = at_state.best_sizes;
 
             // Save these results as requested options.
-            // FIXME: won't work for stage tuning.
             if (targetp == &_settings->_mega_block_sizes)
                 req_opts->_mega_block_sizes = *targetp;
             if (targetp == &_settings->_block_sizes)

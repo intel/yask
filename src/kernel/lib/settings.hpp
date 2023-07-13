@@ -90,7 +90,12 @@ namespace yask {
         // Init MPI, OMP, etc.
         // This is normally called very early in the program.
         virtual void init_env(int* argc, char*** argv, MPI_Comm comm);
+
+        // Finalize MPI.
         virtual void finalize();
+
+        // Exit YASK with given error code.
+        virtual void exit(int code);
 
         // Lock.
         static void set_debug_lock() {

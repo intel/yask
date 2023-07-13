@@ -1,6 +1,6 @@
 ##############################################################################
 ## YASK: Yet Another Stencil Kit
-## Copyright (c) 2014-2022, Intel Corporation
+## Copyright (c) 2014-2023, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -27,16 +27,17 @@
 
 # Some of the make vars that are commonly set via the command-line
 #   and passed to src/kernel/Makefile are listed here.
-#   The 'stencil' and 'arch' vars are most important and should always be specified.
 #
 # stencil: sets stencil problem to be solved.
-#   For a list of current stencils, run the following:
+#   For a list of current stencils known to the YASK compiler, run the following:
 #   % make compiler
 #   % bin/yask_compiler.exe -h
 #   You can also create your own stencil; see the documentation.
+#   You should always set this variable.
 #
 # arch: sets target architecture for best performance.
 #   For a list of archs, see src/kernel/Makefile.
+#   The current host is used to determine if not provided.
 #
 # mpi: 0, 1: whether to use MPI. 
 #
@@ -48,13 +49,9 @@
 #   e.g., A/B => A*(1/B).
 #
 # fold: In which dimension(s) to vectorize.
-# cluster: How many vectors to evaluate simultaneously.
 #
 # pfd_l1: L1 prefetch distance (0 => disabled).
 # pfd_l2: L2 prefetch distance (0 => disabled).
-
-# Common defaults.
-offload			?=	0
 
 # Common settings.
 YASK_BASE	:=	$(abspath .)
@@ -70,6 +67,7 @@ include $(YASK_BASE)/src/common/common.mk
 #YASK_MFLAGS	+=	--output-sync --output-sync=line
 YK_MAKE		:=	$(MAKE) $(YASK_MFLAGS) -C src/kernel YASK_OUTPUT_DIR=$(YASK_OUT_BASE)
 YC_MAKE		:=	$(MAKE) $(YASK_MFLAGS) -C src/compiler YASK_OUTPUT_DIR=$(YASK_OUT_BASE)
+EX_MAKE		:=	$(MAKE) $(YASK_MFLAGS) -C src/examples YASK_OUTPUT_DIR=$(YASK_OUT_BASE)
 
 # Default flags--used only for targets in this Makefile.
 # For compiler, use YC_CXX* vars.
@@ -92,6 +90,9 @@ compiler:
 
 kernel:
 	$(YK_MAKE) $@
+
+examples:
+	$(EX_MAKE)
 
 ######## API targets
 # NB: must set stencil and arch to generate the desired kernel API.
@@ -157,6 +158,7 @@ realclean: clean
 help:
 	@ $(YC_MAKE) $@
 	@ $(YK_MAKE) $@
+	@ $(EX_MAKE) $@
 	@ echo " "
 	@ echo "'setenv CXX_PREFIX ccache' or 'export CXX_PREFIX=ccache' to use ccache."
 
@@ -272,10 +274,14 @@ unit-tests:
 	$(MAKE) tuple-test
 	$(MAKE) combo-test
 
+example-tests:
+	$(EX_MAKE) all-tests
+
 all-tests: compiler-api unit-tests
 	$(YC_MAKE) $@
 	$(YK_MAKE) $@
 	$(MAKE) combo-api-tests
+	$(MAKE) example-tests
 	$(MAKE) clean
 	@echo "All YASK tests have been run"
 

@@ -102,7 +102,7 @@ namespace yask {
                                    int neigh_index)> visitor) {
 
         neighborhood_sizes.visit_all_points
-            ([&](const IdxTuple& neigh_offsets, idx_t i) {
+            ([&](const IdxTuple& neigh_offsets, idx_t i, int thread) {
                  int neigh_rank = my_neighbors.at(i);
                  assert(i == get_neighbor_index(neigh_offsets));
 

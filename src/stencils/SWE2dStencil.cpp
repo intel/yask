@@ -294,8 +294,11 @@ namespace {
         MAKE_VAR(u, t, x, y);
         MAKE_VAR(v, t, x, y);
         MAKE_VAR(e, t, x, y);
+
+        // Output vars.
         MAKE_VAR(q, t, x, y);
-        MAKE_VAR(ke, t, x, y);
+        MAKE_VAR(pe, t, x, y);
+        MAKE_VAR(keH, t, x, y);
         
         // Intermediate solutions for RK sub-stages.
         MAKE_SCRATCH_VAR(u2, x, y);
@@ -369,6 +372,7 @@ namespace {
         // Constant coefficients
         MAKE_SCALAR_VAR(g);  // gravitational acceleration
         MAKE_SCALAR_VAR(coriolis);  // coriolis parameter
+        MAKE_SCALAR_VAR(pe_offset);
 
         // Add a scalar for the data-export time index.
         MAKE_SCALAR_VAR(ti_exp);
@@ -472,14 +476,19 @@ namespace {
                      H3, Hf3, Hu3, Hv3, dudy3, dvdx3, ke3,
                      q3, qa3, qb3, qg3, qd3, q_greeks3, qHu3, qHv3,
                      dedt, dudt, dvdt);
-            e(t+1, x, y) EQUALS 1.0/3.0*e(t, x, y) + 2.0/3.0*(e3(x, y) + dt * dedt) IF_DOMAIN e_interior_domain;
+            auto final_e = 1.0/3.0*e(t, x, y) + 2.0/3.0*(e3(x, y) + dt * dedt);
+            e(t+1, x, y) EQUALS final_e IF_DOMAIN e_interior_domain;
             u(t+1, x, y) EQUALS 1.0/3.0*u(t, x, y) + 2.0/3.0*(u3(x, y) + dt * dudt) IF_DOMAIN u_interior_domain;
             v(t+1, x, y) EQUALS 1.0/3.0*v(t, x, y) + 2.0/3.0*(v3(x, y) + dt * dvdt) IF_DOMAIN v_interior_domain;
 
-            // Copy the final values from the scratch vars.
-            // Copy only when needed as defined by 'ti_exp'.
-            ke(t+1, x, y) EQUALS ke3(x, y) IF_STEP t >= ti_exp;
-            q(t+1, x, y) EQUALS q3(x, y) IF_STEP t >= ti_exp;
+            // Some final calculations.
+            auto H = final_e + h(x, y);
+            auto pev = 0.5 * g * H * (final_e - h(x, y)) + pe_offset;
+            
+            // Set export vars only when needed as defined by 'ti_exp'.
+            keH(t+1, x, y) EQUALS ke3(x, y) * H  IF_STEP t >= ti_exp;
+            pe(t+1, x, y)  EQUALS pev            IF_STEP t >= ti_exp;
+            q(t+1, x, y)   EQUALS q3(x, y)       IF_STEP t >= ti_exp;
         }
 
     protected:

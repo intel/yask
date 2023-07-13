@@ -21,25 +21,31 @@
 ## IN THE SOFTWARE.
 ##############################################################################
 
-# Finite-differences coefficients code.
-# Contributed by Jeremy Tillay.
+# Makefile for the YASK example application 'wave_eq'.
+stencil		?=	wave2d
+real_bytes	?=	8
 
 # Common settings.
-YASK_BASE	?=	$(abspath ../../..)
+YASK_BASE	?=	$(abspath ../..)
 include $(YASK_BASE)/src/common/common.mk
 
-SOURCES := fd_coeff_test.cpp fd_coeff.cpp 
-CXX := g++
-CFLAGS := -std=c++11 
-INCLUDES := -I.
-LDFLAGS :=
-EXECUTABLE := $(BIN_OUT_DIR)/fd_coeff_test.exe
+# Binary.
+WAVE_EQ_EXE	:=	$(BIN_OUT_DIR)/wave_eq.exe
 
-all: $(EXECUTABLE)
+### Make targets ###
 
-$(EXECUTABLE):$(SOURCES)
-	$(MKDIR) $(dir $@)
-	$(CXX) $(CFLAGS) -o $(EXECUTABLE) $(SOURCES) $(LDFLAGS) $(LIBS)
+default: $(WAVE_EQ_EXE)
+	@ls -l $<
 
-clean: 
-	@rm -f $(EXECUTABLE) 
+$(WAVE_EQ_EXE): wave_eq_main.cpp $(YK_LIB)
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) $(YK_LIBS) -o $@
+
+$(YK_LIB): FORCE
+	$(MAKE) -C $(YASK_BASE) stencil=$(stencil) real_bytes=$(real_bytes)
+
+FORCE:
+
+all-tests: $(WAVE_EQ_EXE)
+	$(RUN_PREFIX) $<
+	if (( $(ranks) > 1 )); then $(RUN_PREFIX) mpirun -np $(ranks) $<; fi
+
