@@ -607,27 +607,27 @@ namespace yask {
         double get_sum() const {
             if (_mask & yk_var::yk_sum_reduction)
                 return _sum;
-            THROW_YASK_EXCEPTION("Sum reduction not available");
+            THROW_YASK_EXCEPTION("Sum reduction result not available");
         }
         double get_sum_squares() const {
             if (_mask & yk_var::yk_sum_squares_reduction)
                 return _sum;
-            THROW_YASK_EXCEPTION("Sum-of-squares reduction not available");
+            THROW_YASK_EXCEPTION("Sum-of-squares reduction result not available");
         }
         double get_product() const {
             if (_mask & yk_var::yk_product_reduction)
                 return _prod;
-            THROW_YASK_EXCEPTION("Product reduction not available");
+            THROW_YASK_EXCEPTION("Product reduction result not available");
         }
         double get_max() const {
             if (_mask & yk_var::yk_max_reduction)
                 return _max;
-            THROW_YASK_EXCEPTION("Max reduction not available");
+            THROW_YASK_EXCEPTION("Max reduction result not available");
         }
         double get_min() const {
             if (_mask & yk_var::yk_sum_reduction)
                 return _min;
-            THROW_YASK_EXCEPTION("Min reduction not available");
+            THROW_YASK_EXCEPTION("Min reduction result not available");
         }
     };
     

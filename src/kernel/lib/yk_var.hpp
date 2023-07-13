@@ -52,11 +52,14 @@ namespace yask {
                 YkVarBaseCore <---ptr------- YkVarBase <--sh_ptr-- YkVarImpl
                   ^    ^                      ^   ^  |
                   |    |                      |   |  +---------------+
-    YkElemVarCore<LF> YkVecVarCore<LF> YkElemVar  YkVecVar           |
-         |     ^           ^      |        |        |                |
-         |     |           |      |        |        |                |
-         |     |           +---------------|--has-a-+                |
-         |     +--------------------has-a--+                         |
+                  |    |                      |   |                  |
+                  |    |               YkElemVar  YkVecVar           |
+                  |    |                  |         |                |
+         +-------------------------has-a--+         |                |
+         |        |    |          +-----------has-a-+                |
+         |        |    |          |                                  |
+         v        |    |          v                                  |
+    YkElemVarCore<LF> YkVecVarCore<LF>                               |
          |                        |                                  |
        has-a                    has-a                                |
          |                        |                                  |
