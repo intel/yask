@@ -39,8 +39,6 @@ done
 envs=""
 #envs+=" OMP_DISPLAY_ENV=VERBOSE KMP_VERSION=1"
 envs+=" OMP_PLACES=cores KMP_HOT_TEAMS_MODE=1 KMP_HOT_TEAMS_MAX_LEVEL=3"
-envs+=" I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5"
-envs+=" I_MPI_HBW_POLICY=hbw_preferred,hbw_preferred"
 
 # Default arch.
 cpu_flags=`grep -m1 '^flags' /proc/cpuinfo`
@@ -336,6 +334,14 @@ fi
 # Set MPI command default.
 if [[ $nranks > 1 ]]; then
     : ${mpi_cmd="mpirun -np $nranks"}
+
+    # Add default Intel MPI settings.
+    envs+=" I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5"
+
+    # Check whether HBM policy setting is allowed.
+    if [[ `I_MPI_HBW_POLICY=hbw_preferred,hbw_preferred mpirun -np 1 /bin/date |& grep -c 'Unknown memory policy'` == 0 ]]; then
+        envs+=" I_MPI_HBW_POLICY=hbw_preferred,hbw_preferred"
+    fi
 fi
 
 # Bail on errors past this point, but only errors
