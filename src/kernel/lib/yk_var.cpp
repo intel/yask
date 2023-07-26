@@ -451,8 +451,8 @@ namespace yask {
                         if (errs < max_print) {
                             err_msgs.insert(get_name() +
                                             "(" + opt.make_dim_val_str() +
-                                            "): got " + to_string(te) +
-                                            "; expected " + to_string(re));
+                                            "): got " + to_string(STD_CAST(te)) +
+                                            "; expected " + to_string(STD_CAST(re)));
                         }
                     }
                 }
@@ -588,7 +588,7 @@ namespace yask {
         if (msg.length())
             str = msg + ": ";
         str += get_name() + "[" +
-            make_index_string(idxs) + "] = " + to_string(eval);
+            make_index_string(idxs) + "] = " + to_string(STD_CAST(eval));
         if (line)
             str += " at line " + to_string(line);
         TRACE_MEM_MSG(str);

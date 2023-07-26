@@ -235,7 +235,11 @@ namespace yask {
             _settings._target = format;
         }
         virtual void set_element_bytes(int nbytes) override {
-            _settings._elem_bytes = nbytes;
+            if (nbytes == 2 || nbytes == 4 || nbytes == 8)
+                _settings._elem_bytes = nbytes;
+            else
+                THROW_YASK_EXCEPTION("set_element_bytes(" + std::to_string(nbytes) +
+                                     ") is not supported");
         }
         virtual int get_element_bytes() const override {
             return _settings._elem_bytes;

@@ -34,6 +34,9 @@ include $(YASK_BASE)/src/common/common.mk
 # Initial default settings for the YASK kernel library.
 # These can be overridden on the 'make' command-line.
 # See src/common/common.mk for more setting vars.
+intrinsics		?=	1
+load_intrinsics 	?=	1
+store_intrinsics	?=	1
 numa			?=	1
 allow_new_var_types	?=	1
 streaming_stores	?=	0
@@ -93,6 +96,9 @@ else ifeq ($(TARGET),avx512)
 
  ICC_ISA	?=	-xCORE-AVX512
  GXX_ISA	?=	-mavx512f -mavx512vl -mavx512cd -mavx512bw
+ ifeq ($(real_bytes),2)
+  GXX_ISA	+=	-mavx512fp16
+ endif
  VEC_MACROS	?=	USE_INTRIN512
  ifeq ($(use_rcp),1)
   VEC_MACROS	+=	USE_RCP14
@@ -102,6 +108,9 @@ else ifeq ($(TARGET),avx512-ymm)
 
  ICC_ISA	?=	-xCORE-AVX512
  GXX_ISA	?=	-mavx512f -mavx512vl -mavx512cd -mavx512bw
+ ifeq ($(real_bytes),2)
+  GXX_ISA	+=	-mavx512fp16
+ endif
  VEC_MACROS	?=	USE_INTRIN512LO
  ifeq ($(use_rcp),1)
   VEC_MACROS	+=	USE_RCP14
@@ -409,7 +418,7 @@ else
 
 endif # compiler.
 
-# Add options for OpenMP.
+# Add options for OpenMP, etc.
 ifeq ($(omp),1)
  OMPFLAGS	:=	$(OMPFLAG)
 else
@@ -421,11 +430,19 @@ ifeq ($(offload),1)
   MACROS	+=	USE_OFFLOAD_X86
  endif
  OMPFLAGS	+=	-fopenmp-targets=$(offload_arch)
-else
+else ifeq ($(intrinsics),1)
  MACROS		+=	$(VEC_MACROS)
+else
+ MACROS		+=	NO_INTRINSICS
 endif
 ifeq ($(offload_usm),1)
  MACROS		+=	USE_OFFLOAD_USM
+endif
+ifeq ($(load_intrinsics),0)
+ MACROS		+=	NO_LOAD_INTRINSICS
+endif
+ifeq ($(store_intrinsics),0)
+ MACROS		+=	NO_STORE_INTRINSICS
 endif
 
 # Compile with model_cache=1 or 2 to check prefetching.
@@ -800,11 +817,11 @@ echo-settings:
 	uname -a
 
 # Print stats on inner SIMD loops from asm file.
-code-stats: $(YK_LIB)
-	$(call MK_DIR,$(YK_OBJ_DIR))
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS2) -x c++ -S -o $(YK_OBJ_DIR)/factory.s $(YK_LIB_SRC_DIR)/factory.cpp
+code-stats: $(YK_GEN_HEADERS)
+	$(call MK_DIR,$(YK_EXT_OBJ_DIR))
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS2) -x c++ -S -o $(YK_EXT_OBJ_DIR)/factory.s $(YK_LIB_SRC_DIR)/factory.cpp
 	@echo "Code stats for stencil computation:"
-	$(PERL) $(VIEW_ASM) -p -l -f='calc_' $(YK_OBJ_DIR)/factory.s
+	$(PERL) $(VIEW_ASM) -p -l -f='calc_' $(YK_EXT_OBJ_DIR)/factory.s
 
 # Print some usage info.
 help:
@@ -820,6 +837,7 @@ help:
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd arch=avx512    # Specify arch target"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg fold='x=1,y=2,z=4' # Specify folding (data layout)"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg real_bytes=8  # Use 8-byte (double) floats"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg real_bytes=2  # Use 2-byte (FP16) floats"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXXOPT='-O2' # Use O2 optimization"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXX=icpc   # Use classic Intel compiler"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXX=g++    # Use gnu compiler"; \
@@ -863,7 +881,8 @@ outer_threads	:=	8
 inner_threads	:=	2
 endif
 
-TEST_MAKE_ARGS	:=	real_bytes=8 use_rcp=0 allow_new_var_types=0 trace=1
+TEST_REAL_BYTES	:=	8
+TEST_MAKE_ARGS	:=	real_bytes=$(TEST_REAL_BYTES) use_rcp=0 allow_new_var_types=0 trace=1
 TEST_MAKE 	:=	$(MAKE) $(TEST_MAKE_ARGS)
 
 # Makefile functions for folding.

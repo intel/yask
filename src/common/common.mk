@@ -152,7 +152,7 @@ endif
 # Set 'stencil' to the name of the YASK solution to build.
 stencil			?=	iso3dfd
 
-# Set 'real_bytes' to number of bytes in a float (4 or 8).
+# Set 'real_bytes' to number of bytes in a float (2, 4, or 8).
 real_bytes		?=	4
 
 # Set 'mpi=0' to build without MPI support.

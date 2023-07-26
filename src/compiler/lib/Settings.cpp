@@ -437,7 +437,7 @@ namespace yask {
         parser.add_option(make_shared<command_line_parser::int_option>
                           ("elem-bytes",
                            "Number of bytes in each FP element. "
-                           "Currently, only 4 (single-precision) and 8 (double) are allowed.",
+                           "Currently, 2 (half-precision), 4 (single-precision), and 8 (double) are allowed.",
                            _elem_bytes));
         parser.add_option(make_shared<command_line_parser::string_option>
                           ("step-dim",

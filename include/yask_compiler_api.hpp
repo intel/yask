@@ -206,15 +206,19 @@ namespace yask {
         is_target_set() =0;
 
         /// Get current floating-point precision setting.
-        /** @returns Number of bytes in a FP number. */
+        /** @returns Number of bytes in a FP number: 2, 4, or 8. */
         virtual int
         get_element_bytes() const =0;
 
         /// Set floating-point precision.
+        /**
+           This controls the size of each element in each YASK variable
+           and the precision of floating-point operations used.
+        */
         virtual void
-        set_element_bytes(int nbytes /**< [in] Number of bytes in a FP number.
-                                        Should be 4 or 8. */ ) =0;
-
+        set_element_bytes(int nbytes /**< [in] Number of bytes in each floating-point value.
+                                        Must be 2, 4, or 8. */ ) =0;
+        
         /// Create an n-dimensional variable in the solution.
         /**
            "Var" is a generic term for any n-dimensional variable.  A 0-dim

@@ -386,7 +386,7 @@ namespace yask {
         real_t val = gb().read_elem(indices, asi, __LINE__);
 
         TRACE_MSG("{" << gb().make_index_string(indices) << "} on '" <<
-                  get_name() + "' returns " << val);
+                  get_name() + "' returns " << STD_CAST(val));
         return double(val);
     }
     idx_t YkVarImpl::set_element(double val,

@@ -116,7 +116,9 @@ namespace yask {
 
         /// Get the floating-point precision size.
         /**
-           @returns Number of bytes in each FP element: 4 or 8.
+           @returns Number of bytes in each FP element: 
+           8 for double-precision, 4 for single-precision, 
+           or 2 for half-precision.
         */
         virtual int
         get_element_bytes() const =0;

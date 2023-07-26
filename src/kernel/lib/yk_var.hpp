@@ -1516,11 +1516,12 @@ namespace yask {
             TRACE_MSG("setting all elements in '" + get_name() + "' using seed " << seed);
             _coh._force_state(Coherency::not_init); // because all values will be written.
             real_vec_t seedv;
-            auto n = seedv.get_num_elems();
+            assert(seedv.get_num_elems() == VLEN);
 
-            // Init elements to decreasing multiples of seed.
-            for (int i = 0; i < n; i++)
-                seedv[i] = seed * (double(n - i));
+            // Init elements to multiples of seed.
+            real_t s = real_t(seed);
+            for (int i = 0; i < VLEN; i++)
+                seedv[i] = s * real_t(i + 1);
             _data.set_elems_in_seq(seedv);
             set_dirty_all(self, true);
             _coh.mod_both();

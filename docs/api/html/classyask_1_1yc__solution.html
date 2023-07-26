@@ -569,7 +569,7 @@ virtual void&#160;</td><td class="memItemRight" valign="bottom"><b>clear_folding
 </div><div class="memdoc">
 
 <p>Get current floating-point precision setting. </p>
-<dl class="section return"><dt>Returns</dt><dd>Number of bytes in a FP number. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Number of bytes in a FP number: 2, 4, or 8. </dd></dl>
 
 </div>
 </div>
@@ -598,9 +598,10 @@ virtual void&#160;</td><td class="memItemRight" valign="bottom"><b>clear_folding
 </div><div class="memdoc">
 
 <p>Set floating-point precision. </p>
+<p>This controls the size of each element in each YASK variable and the precision of floating-point operations used. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">nbytes</td><td>Number of bytes in a FP number. Should be 4 or 8. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">nbytes</td><td>Number of bytes in each floating-point value. Must be 2, 4, or 8. </td></tr>
   </table>
   </dd>
 </dl>

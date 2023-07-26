@@ -304,7 +304,7 @@ namespace yask {
 
                                          if (npbytes) {
                                              real_t v0 = *((real_t*)buf);
-                                             TRACE_MSG("got " << v0 << " ... from device");
+                                             TRACE_MSG("got " << STD_CAST(v0) << " ... from device");
                                          }
                                          
                                          halo_copy_time.stop();
@@ -394,7 +394,7 @@ namespace yask {
                                          offload_copy_to_device(buf, nbytes);
                                          
                                          real_t v0 = *((real_t*)buf);
-                                         TRACE_MSG("sent " << v0 << " ... to device");
+                                         TRACE_MSG("sent " << STD_CAST(v0) << " ... to device");
                                          
                                          halo_copy_time.stop();
                                      }

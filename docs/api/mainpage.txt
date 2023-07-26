@@ -161,9 +161,10 @@ The types, classes, and functions are listed in \ref yc.
   - Many examples of using the YASK compiler API to create stencil equations are provided
     in the `src/stencils` directory.
 - Specify the number of bytes in a floating-point element via yc_solution::set_element_bytes().
-  This should be 4 or 8.
+  This should be 8 (double-precision), 4 (single-precision), or 2 (half-precision).
   If you are using the provided YASK compiler utility, this is controlled via the
-  `real_bytes=`<em>4|8</em> `make` parameter.
+  `real_bytes=`<em>8|4|2</em> `make` parameter.
+  Half-precision kernels are only supported on CPUs with the `avx512_fp16` CPUID flag.
 - Optionally specify the vector-folding and/or vector-clustering via 
   yc_solution::set_fold_len() and/or yc_solution::set_cluster_mult().
   If you are using the provided YASK compiler utility, these are controlled via the

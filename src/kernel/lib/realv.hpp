@@ -34,8 +34,81 @@ namespace yask {
     const idx_t idx_max = INT64_MAX;
     const idx_t idx_min = INT64_MIN;
 
+    // values for 16-bit, half-precision reals.
+    #if REAL_BYTES == 2
+    #define NO_SVML
+    typedef _Float16 real_t;
+    typedef ::uint16_t ctrl_t;
+
+    #if defined(USE_INTRIN256)
+    #error "FP16 not supported for AVX or AVX2"
+    
+    #elif defined(USE_INTRIN512LO)
+    typedef __m256h simd_t;
+    typedef __m256i isimd_t;
+    typedef _Float16 imem_t;
+    typedef __mmask8 real_mask_t;
+    const ctrl_t ctrl_idx_mask = 0xf;
+    const ctrl_t ctrl_sel_bit = 0x10;
+    #define VEC_ELEMS 16
+    #define INAME(op) _mm256_ ## op ## _ph
+    #define INAMEI(op) _mm256_ ## op ## _epi16
+
+    // Some "missing" 256-bit fp16 intrinsics.
+    ALWAYS_INLINE __m256h _mm256_mask_load_ph(__m256h src, __mmask32 k, void const* mem_addr) {
+        auto res = _mm256_mask_loadu_epi16(__m256i(src), k, mem_addr);
+        return __m256h(res);
+    }
+    ALWAYS_INLINE __m256h _mm256_mask_loadu_ph(__m256h src, __mmask32 k, void const* mem_addr) {
+        auto res = _mm256_mask_loadu_epi16(__m256i(src), k, mem_addr);
+        return __m256h(res);
+    }
+    ALWAYS_INLINE void _mm256_stream_ph(void* mem_addr, __m256h a) {
+        _mm256_stream_si256(mem_addr, __m256i(a));
+    }
+    ALWAYS_INLINE void _mm256_mask_store_ph(void* mem_addr, __mmask32 k, __m256h a) {
+        _mm256_mask_storeu_epi16(mem_addr, k, __m256i(a));
+    }
+
+    #elif defined(USE_INTRIN512)
+    typedef __m512h simd_t;
+    typedef __m512i isimd_t;
+    typedef void imem_t;
+    typedef __mmask16 real_mask_t;
+    const ctrl_t ctrl_idx_mask = 0x1f;
+    const ctrl_t ctrl_sel_bit = 0x20;
+    #define VEC_ELEMS 32
+    #define INAME(op) _mm512_ ## op ## _ph
+    #define INAMEI(op) _mm512_ ## op ## _epi16
+
+    // Some "missing" 512-bit fp16 intrinsics.
+    ALWAYS_INLINE __m512h _mm512_mask_load_ph(__m512h src, __mmask32 k, void const* mem_addr) {
+        auto res = _mm512_mask_loadu_epi16(__m512i(src), k, mem_addr);
+        return __m512h(res);
+    }
+    ALWAYS_INLINE __m512h _mm512_mask_loadu_ph(__m512h src, __mmask32 k, void const* mem_addr) {
+        auto res = _mm512_mask_loadu_epi16(__m512i(src), k, mem_addr);
+        return __m512h(res);
+    }
+    ALWAYS_INLINE void _mm512_stream_ph(void* mem_addr, __m512h a) {
+        _mm512_stream_si512(mem_addr, __m512i(a));
+    }
+    ALWAYS_INLINE void _mm512_mask_store_ph(void* mem_addr, __mmask32 k, __m512h a) {
+        _mm512_mask_storeu_epi16(mem_addr, k, __m512i(a));
+    }
+
+    // For emulating permute2.
+    #else
+    typedef uidx_t real_mask_t;
+    const ctrl_t ctrl_idx_mask = 0x1f;
+    const ctrl_t ctrl_sel_bit = 0x20;
+    #endif
+
+    // For calling standard functions.
+    #define STD_CAST(x) float(x)
+    
     // values for 32-bit, single-precision reals.
-    #if REAL_BYTES == 4
+    #elif REAL_BYTES == 4
     typedef float real_t;
     typedef ::uint32_t ctrl_t;
 
@@ -68,6 +141,9 @@ namespace yask {
     const ctrl_t ctrl_sel_bit = 0x10;
     #endif
 
+    // For calling standard functions.
+    #define STD_CAST(x) x
+    
     // values for 64-bit, double-precision reals.
     #elif REAL_BYTES == 8
     typedef double real_t;
@@ -102,8 +178,11 @@ namespace yask {
     const ctrl_t ctrl_sel_bit = 0x8;
     #endif
 
+    // For calling standard functions.
+    #define STD_CAST(x) x
+
     #else
-    #error "REAL_BYTES not set to 4 or 8"
+    #error "REAL_BYTES not set to 2, 4, or 8"
     #endif
 
     #ifndef VLEN
@@ -206,6 +285,9 @@ namespace yask {
         #endif
 
         // broadcast scalar.
+        ALWAYS_INLINE real_vec_t(_Float16 val) {
+            operator=(val);
+        }
         ALWAYS_INLINE real_vec_t(float val) {
             operator=(val);
         }
@@ -224,10 +306,10 @@ namespace yask {
             #ifndef USE_OFFLOAD
             for (int i=0; i<VLEN; i++)
                 if ((k1 >> i) & 1) {
-                    auto fpc = std::fpclassify(u.r[i]);
+                    auto fpc = std::fpclassify(STD_CAST(u.r[i]));
                     if (fpc == FP_INFINITE || fpc == FP_NAN)
                         FORMAT_AND_THROW_YASK_EXCEPTION("element " << i <<  msg <<
-                                                        p << " = " << u.r[i]);
+                                                        p << " = " << STD_CAST(u.r[i]));
                 }
             #endif
         }
@@ -270,7 +352,7 @@ namespace yask {
         #endif
 
         // assignment: single value broadcast.
-        ALWAYS_INLINE void operator=(double val) {
+        ALWAYS_INLINE void operator=(_Float16 val) {
             #ifdef NO_INTRINSICS
             REAL_VEC_LOOP(i) u.r[i] = real_t(val);
             #else
@@ -278,6 +360,13 @@ namespace yask {
             #endif
         }
         ALWAYS_INLINE void operator=(float val) {
+            #ifdef NO_INTRINSICS
+            REAL_VEC_LOOP(i) u.r[i] = real_t(val);
+            #else
+            u.mr = INAME(set1)(real_t(val));
+            #endif
+        }
+        ALWAYS_INLINE void operator=(double val) {
             #ifdef NO_INTRINSICS
             REAL_VEC_LOOP(i) u.r[i] = real_t(val);
             #else
@@ -446,7 +535,7 @@ namespace yask {
             #if defined(NO_INTRINSICS) || !defined(USE_AVX512)
             REAL_VEC_LOOP(i) if ((k1 >> i) & 1) u.r[i] = from[i];
             #else
-            u.mr = INAME(mask_mov)(u.mr, real_mask_t(k1), from.u.mr);
+            u.mr = INAMEI(mask_mov)(u.mr, real_mask_t(k1), from.u.mi);
             #endif
         }
 
@@ -483,7 +572,7 @@ namespace yask {
             #if defined(NO_INTRINSICS) || defined(NO_LOAD_INTRINSICS) || !defined(USE_AVX512)
             REAL_VEC_LOOP_UNALIGNED(i) if ((k1 >> i) & 1) u.r[i] = (*from)[i];
             #else
-            u.mr = INAME(mask_loadu)(u.mr, real_mask_t(k1), (imem_t const*)from);
+            u.mr = INAMEI(mask_loadu)(u.mi, real_mask_t(k1), (imem_t const*)from);
             #endif
             check_loaded_value(from, k1);
         }
@@ -496,17 +585,17 @@ namespace yask {
             _VEC_STREAMING
                 #endif
                 REAL_VEC_LOOP(i) (*to)[i] = u.r[i];
-            #elif !defined(USE_STREAMING_STORE)
-            INAME(store)((imem_t*)to, u.mr);
-            #else
+            #elif defined(USE_STREAMING_STORE)
             INAME(stream)((imem_t*)to, u.mr);
+            #else
+            INAME(store)((imem_t*)to, u.mr);
             #endif
             check_stored_value(to);
         }
         ALWAYS_INLINE void store_to_masked(real_vec_t* __restrict to, uidx_t k1) const {
 
             // No masked streaming stores.
-            #if defined(NO_INTRINSICS) || defined(NO_STORE_INTRINSICS) || !defined(USE_AVX512)
+            #if defined(NO_INTRINSICS) || defined(NO_STORE_INTRINSICS)
             REAL_VEC_LOOP(i) if ((k1 >> i) & 1) (*to)[i] = u.r[i];
 
             #elif defined USE_INTRIN256
@@ -538,7 +627,7 @@ namespace yask {
                                                      uidx_t k1) const {
 
             // No unaligned masked streaming stores.
-            #if defined(NO_INTRINSICS) || defined(NO_STORE_INTRINSICS) || !defined(USE_AVX512)
+            #if defined(NO_INTRINSICS) || defined(NO_STORE_INTRINSICS)
             REAL_VEC_LOOP(i) if ((k1 >> i) & 1) (*to)[i] = u.r[i];
 
             #elif defined USE_INTRIN256
@@ -567,7 +656,7 @@ namespace yask {
         void print_reals(std::ostream& os, bool do_end=true) const {
             for (int j = 0; j < VLEN; j++) {
                 if (j) os << ", ";
-                os << "[" << j << "]=" << u.r[j];
+                os << "[" << j << "]=" << STD_CAST(u.r[j]);
             }
             if (do_end)
                 os << std::endl;
@@ -581,7 +670,7 @@ namespace yask {
         return os;
     }
 
-    // More operator overloading.
+    // More operator overloading for real OP vec.
     ALWAYS_INLINE real_vec_t operator+(real_t lhs, const real_vec_t& rhs) {
         return real_vec_t(lhs) + rhs;
     }
@@ -595,7 +684,10 @@ namespace yask {
         return real_vec_t(lhs) / rhs;
     }
 
-    // Safe sqrt.
+    // Safe sqrt, i.e., won't fault with negative inputs.
+    ALWAYS_INLINE _Float16 sqrt_absf(_Float16 a) {
+        return _Float16(sqrtf(fabsf(a)));
+    }
     ALWAYS_INLINE float sqrt_absf(float a) {
         return sqrtf(fabsf(a));
     }
@@ -615,34 +707,25 @@ namespace yask {
 
     // Need simd abs for 256 bits only.
     #if defined(USE_INTRIN256) || defined (USE_INTRIN512LO)
-    #if REAL_BYTES == 4
-    MAKE_INTRIN(abs, fabsf)
-    #else
+    #if REAL_BYTES == 8
     MAKE_INTRIN(abs, fabs)
+    #else
+    MAKE_INTRIN(abs, fabsf)
     #endif
     #endif
 
     // Safe sqrt(x), i.e., sqrt(abs(x)).
     // Used mainly for validation tests.
-    #if REAL_BYTES == 4
-    MAKE_INTRIN(sqrt_abs, sqrt_absf)
-    #else
+    #if REAL_BYTES == 8
     MAKE_INTRIN(sqrt_abs, sqrt_abs)
+    #else
+    MAKE_INTRIN(sqrt_abs, sqrt_absf)
     #endif
 
     #endif
 
     // math func wrappers.
-    #if REAL_BYTES == 4
-    #define SVML_1ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)     \
-        ALWAYS_INLINE real_t yask_fn(const real_t& a) {         \
-            return libm_spfn(a);                                \
-        }
-    #define SVML_2ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)             \
-        ALWAYS_INLINE real_t yask_fn(const real_t& a, const real_t& b) { \
-            return libm_spfn(a, b);                                     \
-        }
-    #else
+    #if REAL_BYTES == 8
     #define SVML_1ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)     \
         ALWAYS_INLINE real_t yask_fn(const real_t& a) {         \
             return libm_dpfn(a);                                \
@@ -650,6 +733,15 @@ namespace yask {
     #define SVML_2ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)             \
         ALWAYS_INLINE real_t yask_fn(const real_t& a, const real_t& b) { \
             return libm_dpfn(a, b);                                     \
+        }
+    #else
+    #define SVML_1ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)     \
+        ALWAYS_INLINE real_t yask_fn(const real_t& a) {         \
+            return libm_spfn(a);                                \
+        }
+    #define SVML_2ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)             \
+        ALWAYS_INLINE real_t yask_fn(const real_t& a, const real_t& b) { \
+            return libm_spfn(a, b);                                     \
         }
     #endif
 
@@ -714,10 +806,13 @@ namespace yask {
 
     // Sin+cos.
     ALWAYS_INLINE void yask_sin_and_cos(real_t& sin_res, real_t& cos_res, real_t a) {
-        #if REAL_BYTES == 4
+        #if REAL_BYTES == 8
+        sincos(a, &sin_res, &cos_res);
+        #elif REAL_BYTES == 4
         sincosf(a, &sin_res, &cos_res);
         #else
-        sincos(a, &sin_res, &cos_res);
+        sin_res = real_t(sinf(float(a)));
+        cos_res = real_t(cosf(float(a)));
         #endif
     }
     ALWAYS_INLINE void yask_cos_and_sin(real_t& cos_res, real_t& sin_res, real_t a) {
@@ -726,7 +821,7 @@ namespace yask {
     ALWAYS_INLINE void yask_sin_and_cos(real_vec_t& sin_res,
                                         real_vec_t& cos_res,
                                         const real_vec_t& a) {
-        #if defined(NO_INTRINSICS) || defined(NO_SVML)
+        #if defined(NO_INTRINSICS) || defined(NO_SVML) || REAL_BYTES == 2
         REAL_VEC_LOOP(i) yask_sin_and_cos(sin_res[i], cos_res[i], a[i]);
         #else
         sin_res.u.mr = INAME(sincos)(&cos_res.u.mr, a.u.mr);
@@ -805,6 +900,16 @@ namespace yask {
             real_vec_t* p = (real_vec_t*)(&r2[count]); // not usually aligned.
             res.u.mr = INAME(loadu)((imem_t const*)p);
 
+            // 16-bit (pass 'count * 2' to byte align)
+            #elif REAL_BYTES == 2
+            #if VEC_ELEMS == 16
+            res.u.mi = _mm256_alignr_epi8(a.u.mi, b.u.mi, count * 2);
+            #elif VEC_ELEMS == 32
+            res.u.mi = _mm512_alignr_epi8(a.u.mi, b.u.mi, count * 2);
+            #else
+            #error "Only 16 and 32-element 16-bit ops supported"
+            #endif
+
             // Everything else.
             #else
             res.u.mi = INAMEI(alignr)(a.u.mi, b.u.mi, count);
@@ -843,17 +948,34 @@ namespace yask {
         for (int i = VLEN-count; i < VLEN; i++)
             if ((k1 >> i) & 1)
                 res.u.r[i] = tmpa.u.r[i + count - VLEN];
+
+        // 16-bit (duplicate mask bits and pass 'count * 2' to byte align)
+        #elif REAL_BYTES == 2
+        real_mask_t k2 = 0;
+        REAL_VEC_LOOP(i) {
+            if ((k1 >> i) & 1)
+                k2 |= 0x3 << (i * 2);
+        }
+        #if VEC_ELEMS == 16
+        res.u.mi = _mm256_mask_alignr_epi8(res.u.mi, k2, a.u.mi, b.u.mi, count * 2);
+        #elif VEC_ELEMS == 32
+        res.u.mi = _mm512_mask_alignr_epi8(res.u.mi, k2, a.u.mi, b.u.mi, count * 2);
+        #else
+        #error "Only 16 and 32-element 16-bit ops supported"
+        #endif
+
+        // Everything else.
         #else
         res.u.mi = INAMEI(mask_alignr)(res.u.mi, real_mask_t(k1), a.u.mi, b.u.mi, count);
         #endif
-
+        
         #ifdef TRACE_INTRINSICS
         std::cout << " res(after): ";
         res.print_reals(std::cout);
         #endif
     }
 
-    // Rearrange elements in a vector.
+    // Rearrange elements from a vector.
     ALWAYS_INLINE void real_vec_permute(real_vec_t& res, const real_vec_t& ctrl, const real_vec_t& a) {
 
         #ifdef TRACE_INTRINSICS
@@ -879,7 +1001,7 @@ namespace yask {
         #endif
     }
 
-    // Rearrange elements in a vector w/masking.
+    // Rearrange elements from a vector w/masking.
     // Elements in res corresponding to 0 bits in k1 are unchanged.
     ALWAYS_INLINE void real_vec_permute_masked(real_vec_t& res, const real_vec_t& ctrl, const real_vec_t& a,
                                                uidx_t k1) {
@@ -911,7 +1033,7 @@ namespace yask {
         #endif
     }
 
-    // Rearrange elements in 2 vectors.
+    // Rearrange elements from 2 vectors.
     // (The masking versions of these instrs do not preserve the source,
     // so we don't have a masking version of this function.)
     ALWAYS_INLINE void real_vec_permute2(real_vec_t& res, const real_vec_t& ctrl,

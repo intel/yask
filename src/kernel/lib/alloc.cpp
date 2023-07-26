@@ -286,56 +286,56 @@ namespace yask {
             auto seq_num = key.second;
             TRACE_MSG("allocation req <" << mem_key << ", " << seq_num << "> for " <<
                       make_byte_str(data.nbytes));
-            if (data.nbytes == 0)
-                continue;
 
             // Alloc data depending on magic key.
             shared_ptr<char> p;
-            string msg = "Allocating " + make_byte_str(data.nbytes) +
-                " for " + to_string(data.nvars) + " " + type + "(s) ";
+            if (data.nbytes > 0) {
+                string msg = "Allocating " + make_byte_str(data.nbytes) +
+                    " for " + to_string(data.nvars) + " " + type + "(s) ";
 
-            if (mem_key == _shmem_key) {
-                msg += "using MPI shm";
-                DEBUG_MSG(msg << "...");
-                p = shared_shm_alloc<char>(data.nbytes, &env->shm_comm, &mpi_info->halo_win);
+                if (mem_key == _shmem_key) {
+                    msg += "using MPI shm";
+                    DEBUG_MSG(msg << "...");
+                    p = shared_shm_alloc<char>(data.nbytes, &env->shm_comm, &mpi_info->halo_win);
 
-                // Get pointer for each neighbor rank.
-                #ifdef USE_MPI
-                int ns = int(mpi_info->neighborhood_size);
-                for (int ni = 0; ni < ns; ni++) {
-                    int nr = mpi_info->my_neighbors.at(ni);
-                    if (nr == MPI_PROC_NULL)
-                        continue;
-                    int sr = mpi_info->shm_ranks.at(ni);
-                    MPI_Aint sz;
-                    int dispunit;
-                    void* baseptr;
-                    MPI_Win_shared_query(mpi_info->halo_win, sr, &sz,
-                                         &dispunit, &baseptr);
-                    mpi_info->halo_buf_ptrs.at(ni) = baseptr;
-                    mpi_info->halo_buf_sizes.at(ni) = sz;
-                    TRACE_MSG("MPI shm halo buffer for rank " << nr << " is at " <<
-                              baseptr << " for " << make_byte_str(sz));
+                    // Get pointer for each neighbor rank.
+                    #ifdef USE_MPI
+                    int ns = int(mpi_info->neighborhood_size);
+                    for (int ni = 0; ni < ns; ni++) {
+                        int nr = mpi_info->my_neighbors.at(ni);
+                        if (nr == MPI_PROC_NULL)
+                            continue;
+                        int sr = mpi_info->shm_ranks.at(ni);
+                        MPI_Aint sz;
+                        int dispunit;
+                        void* baseptr;
+                        MPI_Win_shared_query(mpi_info->halo_win, sr, &sz,
+                                             &dispunit, &baseptr);
+                        mpi_info->halo_buf_ptrs.at(ni) = baseptr;
+                        mpi_info->halo_buf_sizes.at(ni) = sz;
+                        TRACE_MSG("MPI shm halo buffer for rank " << nr << " is at " <<
+                                  baseptr << " for " << make_byte_str(sz));
+                    }
+                    #endif
                 }
-                #endif
+                else {
+                    if (mem_key == yask_numa_none)
+                        msg += "using default allocator";
+                    else if (mem_key == yask_numa_offload)
+                        msg += "using default allocator for offloading";
+                    else if (mem_key == yask_numa_local)
+                        msg += "preferring local NUMA node";
+                    else if (mem_key == yask_numa_interleave)
+                        msg += "interleaved across all NUMA nodes";
+                    else if (mem_key >= 0)
+                        msg += "preferring NUMA node " + to_string(mem_key);
+                    else
+                        msg += "using mem policy " + to_string(mem_key);
+                    DEBUG_MSG(msg << "...");
+                    p = shared_numa_alloc<char>(data.nbytes, mem_key);
+                }
             }
-            else {
-                if (mem_key == yask_numa_none)
-                    msg += "using default allocator";
-                else if (mem_key == yask_numa_offload)
-                    msg += "using default allocator for offloading";
-                else if (mem_key == yask_numa_local)
-                    msg += "preferring local NUMA node";
-                else if (mem_key == yask_numa_interleave)
-                    msg += "interleaved across all NUMA nodes";
-                else if (mem_key >= 0)
-                    msg += "preferring NUMA node " + to_string(mem_key);
-                else
-                    msg += "using mem policy " + to_string(mem_key);
-                DEBUG_MSG(msg << "...");
-                p = shared_numa_alloc<char>(data.nbytes, mem_key);
-            }
-
+            
             // Save ptr value.
             data.ptr = p;
             TRACE_MSG("Got memory at " << static_cast<void*>(p.get()));
@@ -447,7 +447,7 @@ namespace yask {
 
             } // vars.
 
-            // Alloc for each "numa_pref" type.
+            // Alloc for each 'req_key'.
             if (pass == 0)
                 _alloc_data(alloc_reqs, "var");
 

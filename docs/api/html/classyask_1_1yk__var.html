@@ -406,7 +406,7 @@ Miscellaneous Dimensions</h2>
 Other Details</h1>
 <h2><a class="anchor" id="autotoc_md5"></a>
 Elements</h2>
-<p>All sizes are expressed in numbers of elements. Each element may be a 4-byte (single precision) or 8-byte (double precision) floating-point value as returned by <a class="el" href="classyask_1_1yk__solution.html#a50e565487b7175447cc9f6489221eef4" title="Get the floating-point precision size.">yk_solution::get_element_bytes()</a>.</p>
+<p>All sizes are expressed in numbers of elements. Each element may be an 8-byte, 4-byte, or 2-byte floating-point value as returned by <a class="el" href="classyask_1_1yk__solution.html#a50e565487b7175447cc9f6489221eef4" title="Get the floating-point precision size.">yk_solution::get_element_bytes()</a>.</p>
 <h2><a class="anchor" id="autotoc_md6"></a>
 Data Storage</h2>
 <p>Initially, a var is not assigned any allocated storage. This is done to allow modification of domain, padding, and other allocation sizes before allocation. Once the allocation sizes have been set in all dimensions, the data storage itself may be allocated. This can be done in any of the following ways:</p><ul>
@@ -1528,7 +1528,7 @@ Data Storage</h2>
 
 <p>Read the value of one element in this var. </p>
 <p>Provide indices in a list in the same order listed when the var was defined, i,e., the order returned by <a class="el" href="classyask_1_1yk__var.html#adf2e93317a2e86d80713ad56a46fdc68" title="Get all the dimensions in this var.">get_dim_names()</a>. Indices are relative to the <em>overall</em> problem domain.</p>
-<dl class="section note"><dt>Note</dt><dd>The return value is a double-precision floating-point value; it will be converted to double-precision for single-precision vars.</dd>
+<dl class="section note"><dt>Note</dt><dd>The return value is a double-precision floating-point value; it will be converted to double-precision for single-precision or half-precision vars.</dd>
 <dd>
 do not use this API to get many contiguous values; <a class="el" href="classyask_1_1yk__var.html#a87233274749b94a4c847ecc4607ba0cc" title="Copy elements within specified subset of this var into a float buffer.">get_elements_in_slice()</a> is much more efficient.</dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>value in var at given indices.</dd></dl>
@@ -1632,7 +1632,7 @@ do not use this API to get many contiguous values; <a class="el" href="classyask
 
 <p>Set the value of one element in this var. </p>
 <p>Provide indices in a list in the same order returned by <a class="el" href="classyask_1_1yk__var.html#adf2e93317a2e86d80713ad56a46fdc68" title="Get all the dimensions in this var.">get_dim_names()</a>. Indices are relative to the <em>overall</em> problem domain. If the var uses the step dimension, the value of the step index will be used to update the current valid step indices in the var. If <code>strict_indices</code> is <code>false</code> and any non-step index values are invalid as defined by <a class="el" href="classyask_1_1yk__var.html#a3cc808533b7c6e34614409d34bec1a86" title="Determine whether the given indices refer to an accessible element in this rank.">are_indices_local()</a>, the API will have no effect and return zero (0).</p>
-<dl class="section note"><dt>Note</dt><dd>The parameter value is a double-precision floating-point value, but it will be converted to single-precision for single-precision vars.</dd>
+<dl class="section note"><dt>Note</dt><dd>The parameter value is a double-precision value, but it will be converted to single-precision or half-precision if needed.</dd>
 <dd>
 do not use this API to set many contiguous values; <a class="el" href="classyask_1_1yk__var.html#a5c777cd27d09dc1110c5bf87d2084500" title="Set elements within specified subset of the var from values in a float buffer.">set_elements_in_slice()</a> is much more efficient.</dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>Number of elements set, which will be one (1) if the indices are valid and zero (0) if they are not.</dd></dl>
@@ -1764,7 +1764,7 @@ do not use this API to set many contiguous values; <a class="el" href="classyask
 <p>Reads all elements from <code>first_indices</code> to <code>last_indices</code> in each dimension and writes them to consecutive memory locations in the buffer. Indices in the buffer progress in row-major order, i.e., traditional C-language layout, using the order of dimensions when the var was declared. In other words, the last index is "unit-stride" in the buffer.</p>
 <p>The buffer pointed to must contain at least the number of floats as the total number of elements in the specified slice. Thus, the buffer must be a simple flat array of data, not containing pointers; for example, for a 2-D YASK var created via <code><a class="el" href="group__yc.html#gae3d7fce5f0ac5dba65bc16ce8a342553" title="Convenience macro for creating a yask::yc_var_proxy for an n-dimensional YASK variable.">MAKE_VAR(A, x, y)</a></code>, the buffer could be declared as <code>float A[xsize*ysize]</code> or <code>float A[xsize][ysize]</code>, but <em>not</em> as <code>float** A</code>.</p>
 <p>Provide indices in two lists in the same order used during var declaration. Indices are relative to the <em>overall</em> problem domain.</p>
-<dl class="section note"><dt>Note</dt><dd>if this is a double-precision solution, each value will be converted to a <code>float</code>, and precision will be lost. The <code>float*</code> version is also more efficient.</dd></dl>
+<dl class="section note"><dt>Note</dt><dd>if this is a double-precision or half-precision solution, each value will be converted to a <code>float</code>. The <code>float*</code> version is more efficient for single-precision solutions.</dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>Number of elements read.</dd></dl>
 <dl class="exception"><dt>Exceptions</dt><dd>
   <table class="exception">
@@ -1836,7 +1836,7 @@ do not use this API to set many contiguous values; <a class="el" href="classyask
 <p>Reads all elements from <code>first_indices</code> to <code>last_indices</code> in each dimension and writes them to consecutive memory locations in the buffer. Indices in the buffer progress in row-major order, i.e., traditional C-language layout, using the order of dimensions when the var was declared. In other words, the last index is "unit-stride" in the buffer.</p>
 <p>The buffer pointed to must contain at least the number of doubles as the total number of elements in the specified slice. Thus, the buffer must be a simple flat array of data, not containing pointers; for example, for a 2-D YASK var created via <code><a class="el" href="group__yc.html#gae3d7fce5f0ac5dba65bc16ce8a342553" title="Convenience macro for creating a yask::yc_var_proxy for an n-dimensional YASK variable.">MAKE_VAR(A, x, y)</a></code>, the buffer could be declared as <code>double A[xsize*ysize]</code> or <code>double A[xsize][ysize]</code>, but <em>not</em> as <code>double** A</code>.</p>
 <p>Provide indices in two lists in the same order used during var declaration. Indices are relative to the <em>overall</em> problem domain.</p>
-<dl class="section note"><dt>Note</dt><dd>if this is a single-precision solution, each value will be converted to a <code>double</code>. The <code>double*</code> version is more efficient.</dd></dl>
+<dl class="section note"><dt>Note</dt><dd>if this is a single-precision or half-precision solution, each value will be converted to a <code>double</code>. The <code>double*</code> version is more efficient for double-precision solutions.</dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>Number of elements read.</dd></dl>
 <dl class="exception"><dt>Exceptions</dt><dd>
   <table class="exception">
@@ -1900,7 +1900,7 @@ do not use this API to set many contiguous values; <a class="el" href="classyask
 
 <p>Atomically add to the value of one var element. </p>
 <p>Provide indices in a list in the same order returned by <a class="el" href="classyask_1_1yk__var.html#adf2e93317a2e86d80713ad56a46fdc68" title="Get all the dimensions in this var.">get_dim_names()</a>. Indices are relative to the <em>overall</em> problem domain. Index values must fall between the values returned by <a class="el" href="classyask_1_1yk__var.html#aaf5b3f06b832bbf77b8f722fda8a2998" title="Get the first valid index in this rank in the specified dimension.">get_first_local_index()</a> and <a class="el" href="classyask_1_1yk__var.html#a7266bb36c93cb6ae538a0f081f22fad7" title="Get the last index in this rank in the specified dimension.">get_last_local_index()</a>, inclusive. Updates are OpenMP atomic, meaning that this function can be called by several OpenMP threads without causing a race condition. If storage has not been allocated for this var, this will have no effect and return zero (0) if <code>strict_indices</code> is <code>false</code>.</p>
-<dl class="section note"><dt>Note</dt><dd>The parameter value is a double-precision floating-point value, but it will be converted to single-precision if this is a single-precision solution.</dd></dl>
+<dl class="section note"><dt>Note</dt><dd>The parameter value is a double-precision floating-point value, but it will be converted to single-precision or half-precision if needed.</dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>Number of elements updated.</dd></dl>
 <dl class="exception"><dt>Exceptions</dt><dd>
   <table class="exception">
@@ -1998,7 +1998,7 @@ do not use this API to set many contiguous values; <a class="el" href="classyask
 
 <p>Initialize all var elements to the same value. </p>
 <p>Sets all allocated elements, including those in the domain and padding area to the same specified value. If storage has not been allocated, this will have no effect.</p>
-<dl class="section note"><dt>Note</dt><dd>The parameter is a double-precision floating-point value, but it will be converted to single-precision if <a class="el" href="classyask_1_1yk__solution.html#a50e565487b7175447cc9f6489221eef4" title="Get the floating-point precision size.">yk_solution::get_element_bytes()</a> returns 4. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>The parameter is a double-precision floating-point value, but it will be converted to single-precision or half-precision if needed. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">val</td><td>All elements will be set to this. </td></tr>
@@ -2056,7 +2056,7 @@ do not use this API to set many contiguous values; <a class="el" href="classyask
 
 <p>Initialize var elements within specified subset of the var to the same value. </p>
 <p>Sets all elements from <code>first_indices</code> to <code>last_indices</code> in each dimension to the specified value. Provide indices in two lists in the same order used during var declaration. Indices are relative to the <em>overall</em> problem domain.</p>
-<dl class="section note"><dt>Note</dt><dd>The parameter is a double-precision floating-point value, but it will be converted to single-precision if this is a single-precision solution.</dd></dl>
+<dl class="section note"><dt>Note</dt><dd>The parameter is a double-precision floating-point value, but it will be converted to single-precision or half-precision if needed.</dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>Number of elements set.</dd></dl>
 <dl class="exception"><dt>Exceptions</dt><dd>
   <table class="exception">
@@ -2127,7 +2127,7 @@ do not use this API to set many contiguous values; <a class="el" href="classyask
 <p>Reads <code>float</code> values from consecutive memory locations, starting at <code>buffer_ptr</code> and writes them from <code>first_indices</code> to <code>last_indices</code> in each dimension. Indices in the buffer progress in row-major order, i.e., traditional C-language layout, using the order of dimensions when the var was declared. In other words, the last index is "unit-stride" in the buffer.</p>
 <p>The buffer pointed to must contain at least the number of floats as the total number of elements in the specified slice. Thus, the buffer must be a simple flat array of data, not containing pointers; for example, for a 2-D YASK var created via <code><a class="el" href="group__yc.html#gae3d7fce5f0ac5dba65bc16ce8a342553" title="Convenience macro for creating a yask::yc_var_proxy for an n-dimensional YASK variable.">MAKE_VAR(A, x, y)</a></code>, the buffer could be declared as <code>float A[xsize*ysize]</code> or <code>float A[xsize][ysize]</code>, but <em>not</em> as <code>float** A</code>.</p>
 <p>Provide indices in two lists in the same order used during var declaration. Indices are relative to the <em>overall</em> problem domain.</p>
-<dl class="section note"><dt>Note</dt><dd>if this is a double-precision solution, each value will be converted to a <code>double</code>. The <code>double*</code> version is more efficient.</dd></dl>
+<dl class="section note"><dt>Note</dt><dd>if this is a double-precision or half-precision solution, each value will be converted as needed. The <code>double*</code> version is more efficient for double-precision solutions.</dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>Number of elements written.</dd></dl>
 <dl class="exception"><dt>Exceptions</dt><dd>
   <table class="exception">
@@ -2199,7 +2199,7 @@ do not use this API to set many contiguous values; <a class="el" href="classyask
 <p>Reads <code>double</code> values from consecutive memory locations, starting at <code>buffer_ptr</code> and writes them from <code>first_indices</code> to <code>last_indices</code> in each dimension. Indices in the buffer progress in row-major order, i.e., traditional C-language layout, using the order of dimensions when the var was declared. In other words, the last index is "unit-stride" in the buffer.</p>
 <p>The buffer pointed to must contain at least the number of doubles as the total number of elements in the specified slice. Thus, the buffer must be a simple flat array of data, not containing pointers; for example, for a 2-D YASK var created via <code><a class="el" href="group__yc.html#gae3d7fce5f0ac5dba65bc16ce8a342553" title="Convenience macro for creating a yask::yc_var_proxy for an n-dimensional YASK variable.">MAKE_VAR(A, x, y)</a></code>, the buffer could be declared as <code>double A[xsize*ysize]</code> or <code>double A[xsize][ysize]</code>, but <em>not</em> as <code>double** A</code>.</p>
 <p>Provide indices in two lists in the same order used during var declaration. Indices are relative to the <em>overall</em> problem domain.</p>
-<dl class="section note"><dt>Note</dt><dd>if this is a single-precision solution, each value will be converted to a <code>float</code>, and precision will be lost. The <code>float*</code> version is also more efficient.</dd></dl>
+<dl class="section note"><dt>Note</dt><dd>if this is a single-precision or half-precision solution, each value will be converted as needed. The <code>float*</code> version is more efficient for single-precision solutions.</dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>Number of elements written.</dd></dl>
 <dl class="exception"><dt>Exceptions</dt><dd>
   <table class="exception">

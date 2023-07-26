@@ -162,9 +162,8 @@ namespace yask {
 
        ## Elements #
 
-       All sizes are expressed in numbers of elements.
-       Each element may be a 4-byte (single precision)
-       or 8-byte (double precision) floating-point value as returned by
+       All sizes are expressed in numbers of elements.  Each element may be
+       an 8-byte, 4-byte, or 2-byte floating-point value as returned by
        yk_solution::get_element_bytes().
 
        ## Data Storage #
@@ -581,8 +580,9 @@ namespace yask {
            i,e., the order returned by get_dim_names().
            Indices are relative to the *overall* problem domain.
 
-           @note The return value is a double-precision floating-point value;
-           it will be converted to double-precision for single-precision vars.
+           @note The return value is a double-precision floating-point
+           value; it will be converted to double-precision for
+           single-precision or half-precision vars.
 
            @note do not use this API to get many contiguous values; get_elements_in_slice()
            is much more efficient.
@@ -620,8 +620,8 @@ namespace yask {
            are invalid as defined by are_indices_local(),
            the API will have no effect and return zero (0).
 
-           @note The parameter value is a double-precision floating-point value, but
-           it will be converted to single-precision for single-precision vars.
+           @note The parameter value is a double-precision value, but
+           it will be converted to single-precision or half-precision if needed.
 
            @note do not use this API to set many contiguous values; set_elements_in_slice()
            is much more efficient.
@@ -682,9 +682,9 @@ namespace yask {
            var declaration.
            Indices are relative to the *overall* problem domain.
 
-           @note if this is a double-precision solution, each value will be converted
-           to a `float`, and precision will be lost. 
-           The `float*` version is also more efficient.
+           @note if this is a double-precision or half-precision solution,
+           each value will be converted to a `float`.
+           The `float*` version is more efficient for single-precision solutions.
 
            @returns Number of elements read.
 
@@ -727,8 +727,9 @@ namespace yask {
            var declaration.
            Indices are relative to the *overall* problem domain.
 
-           @note if this is a single-precision solution, each value will be converted
-           to a `double`. The `double*` version is more efficient.
+           @note if this is a single-precision or half-precision solution,
+           each value will be converted to a `double`. The `double*` version
+           is more efficient for double-precision solutions.
 
            @returns Number of elements read.
 
@@ -763,7 +764,7 @@ namespace yask {
            and return zero (0) if `strict_indices` is `false`.
 
            @note The parameter value is a double-precision floating-point value, but
-           it will be converted to single-precision if this is a single-precision solution.
+           it will be converted to single-precision or half-precision if needed.
 
            @returns Number of elements updated.
 
@@ -802,8 +803,7 @@ namespace yask {
            If storage has not been allocated, this will have no effect.
 
            @note The parameter is a double-precision floating-point value, but
-           it will be converted to single-precision if
-           yk_solution::get_element_bytes() returns 4.
+           it will be converted to single-precision or half-precision if needed.
         */
         virtual void
         set_all_elements_same(double val /**< [in] All elements will be set to this. */ ) =0;
@@ -817,7 +817,7 @@ namespace yask {
            Indices are relative to the *overall* problem domain.
 
            @note The parameter is a double-precision floating-point value, but
-           it will be converted to single-precision if this is a single-precision solution.
+           it will be converted to single-precision or half-precision if needed.
 
            @returns Number of elements set.
 
@@ -860,8 +860,9 @@ namespace yask {
            var declaration.
            Indices are relative to the *overall* problem domain.
 
-           @note if this is a double-precision solution, each value will be converted
-           to a `double`. The `double*` version is more efficient.
+           @note if this is a double-precision or half-precision solution,
+           each value will be converted as needed. The `double*` version is
+           more efficient for double-precision solutions.
 
            @returns Number of elements written.
 
@@ -905,9 +906,9 @@ namespace yask {
            var declaration.
            Indices are relative to the *overall* problem domain.
 
-           @note if this is a single-precision solution, each value will be converted
-           to a `float`, and precision will be lost.
-           The `float*` version is also more efficient.
+           @note if this is a single-precision or half-precision solution,
+           each value will be converted as needed. The `float*` version is
+           more efficient for single-precision solutions.
 
            @returns Number of elements written.
 
