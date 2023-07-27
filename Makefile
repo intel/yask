@@ -266,9 +266,9 @@ combo-test: $(COMBO_TEST_EXEC)
 	$(RUN_PREFIX) $<
 
 api-tests: compiler-api
-	$(MAKE) combo-api-tests
 	$(YC_MAKE) $@
 	$(YK_MAKE) $@
+	$(MAKE) combo-api-tests
 
 unit-tests:
 	$(MAKE) tuple-test
