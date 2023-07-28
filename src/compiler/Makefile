@@ -195,7 +195,10 @@ api-tests:
 	$(MAKE) cxx-yc-api-test-with-exception
 	$(MAKE) py-yc-api-test-with-exception
 
-all-tests: api-tests
+# no unit tests yet.
+unit-tests:
+
+all-tests: api-tests unit-tests
 
 all:
 	$(MAKE) compiler
