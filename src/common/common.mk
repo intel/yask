@@ -190,8 +190,12 @@ ifeq ($(offload),1)
 endif
 
 # Base compiler flags for building kernel lib and apps.
+ifeq ($(offload),1)
+ YK_CXXDBG	:=	-gline-tables-only
+else
+ YK_CXXDBG	:=	-g
+endif
 YK_CXXOPT	:=	-O3
-YK_CXXDBG	:=	-g
 YK_CXXWARN	:=	-Wall
 YK_CXXFLAGS	:=	-std=c++17 $(YK_CXXDBG) $(YK_CXXOPT) $(YK_CXXWARN) -I$(INC_DIR) $(EXTRA_YK_CXXFLAGS)
 ifeq ($(mpi),1)
@@ -202,9 +206,9 @@ endif
 YK_LIBS		:=	-lrt
 YK_LFLAGS	:=	-Wl,-rpath=$(LIB_OUT_DIR) -L$(LIB_OUT_DIR) -l$(YK_EXT_BASE)
 
-# Default number of ranks for running tests.
-# 4 is good because it tests in-plane diagonal exchanges for 2D and 3D tests.
-# 8 would test all exchanges for 3D tests.
+# Default number of ranks for running MPI tests.
+# 4 tests in-plane diagonal exchanges for 2D and 3D tests.
+# 8 tests all exchanges for 3D tests.
 ifneq ($(mpi),1)
 ranks	:=	1
 else
