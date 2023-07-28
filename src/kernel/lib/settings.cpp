@@ -397,14 +397,13 @@ namespace yask {
                            use_shm));
         parser.add_option(make_shared<command_line_parser::bool_option>
                           ("force_scalar_exchange",
-                           "[Debug] Do not allow vectorized halo exchanges.",
+                           "[Debug] Do not allow vectorized halo packing and unpacking.",
                            force_scalar_exchange));
         #endif
         #endif
         parser.add_option(make_shared<command_line_parser::bool_option>
                           ("force_scalar",
-                           "[Debug] Evaluate every var point with scalar stencil operations "
-                           "and exchange halos using only scalar packing and unpacking.",
+                           "[Debug] Do not allow vector stencil computation.",
                            force_scalar));
         parser.add_option(make_shared<command_line_parser::int_option>
                           ("max_threads",
