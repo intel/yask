@@ -70,7 +70,6 @@ YC_EXEC		:=	$(BIN_OUT_DIR)/$(YC_BASE).exe
 YC_SRC_DIR	:=	$(SRC_DIR)/compiler
 
 # Tools.
-CXX		:=	icpx
 SWIG		:=	swig
 PERL		:=	perl
 MKDIR		:=	mkdir -p -v
@@ -178,6 +177,7 @@ YK_EXT_BASE	:=	$(YK_BASE).$(YK_TAG)
 YK_LIB		:=	$(LIB_OUT_DIR)/lib$(YK_EXT_BASE)$(SO_SUFFIX)
 
 # Compiler for building kernel lib and apps.
+CXX		:=	icpx
 YK_CXX		:=	$(CXX)
 MPI_CXX 	:=	mpiicpc
 ifeq ($(mpi),1)
