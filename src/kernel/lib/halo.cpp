@@ -288,7 +288,7 @@ namespace yask {
                                          if (send_vec_ok)
                                              nelems = gb.get_vecs_in_slice(bufp, first, last, use_offload);
                                          else
-                                             nelems = gb.get_elements_in_slice(bufp, first, last, use_offload);
+                                             nelems = gb.get_elements_in_slice_void(bufp, first, last, use_offload);
                                          auto nb = nelems * get_element_bytes();
                                          bufp += nb;
                                          npbytes += nb;
@@ -418,9 +418,9 @@ namespace yask {
                                                    (use_offload ? " on device" : " on host"));
                                          idx_t nelems = 0;
                                          if (recv_vec_ok)
-                                             nelems = gp->set_vecs_in_slice(bufp, first, last, use_offload);
+                                             nelems = gb.set_vecs_in_slice(bufp, first, last, use_offload);
                                          else
-                                             nelems = gp->set_elements_in_slice(bufp, first, last, use_offload);
+                                             nelems = gb.set_elements_in_slice_void(bufp, first, last, use_offload);
                                          auto nb = nelems * get_element_bytes();
                                          bufp += nb;
                                          npbytes += nb;
