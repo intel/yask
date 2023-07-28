@@ -49,9 +49,9 @@ and Intel(R) graphics processors.
       You'll get a warning when running `make` if one of these doesn't exist.
       Everything will still work, but the generated code will be difficult to read.
       Reading the generated code is only necessary for debug or curiosity.
-    * SWIG (3.0.12 or later; 4.0.0 or later recommended),
+    * SWIG (4.0.0 or later):
       http://www.swig.org, for creating the Python interface.
-    * Python 3 (3.6.1 or later, recommended):
+    * Python 3 (3.6.1 or later):
       https://www.python.org/downloads, for creating and using the Python interface.
     * Doxygen (1.9.0 or later):
       https://www.doxygen.nl, for creating updated API documentation.
