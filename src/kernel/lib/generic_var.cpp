@@ -154,10 +154,13 @@ namespace yask {
             // Also update the version on the device.
             #ifdef USE_OFFLOAD_NO_USM
             auto devn = KernelEnv::_omp_devn;
-            
+
+            auto cval = get_copyable(val);
             _Pragma("omp target teams distribute parallel for device(devn)")
-                for (idx_t i = 0; i < ne; i++)
-                    elems[i] = val;
+                for (idx_t i = 0; i < ne; i++) {
+                    T kval = cval;
+                    elems[i] = kval;
+                }
             #endif
         }
     }
@@ -184,10 +187,13 @@ namespace yask {
             // Also update the version on the device to the same sequence.
             #ifdef USE_OFFLOAD_NO_USM
             auto devn = KernelEnv::_omp_devn;
-            
+
+            auto cseed = get_copyable(seed);
             _Pragma("omp target teams distribute parallel for device(devn)")
-                for (idx_t i = 0; i < ne; i++)
-                    elems[i] = seed * T(imod_flr(i, wrap) + 1);
+                for (idx_t i = 0; i < ne; i++) {
+                    T kseed = cseed;
+                    elems[i] = kseed * T(imod_flr(i, wrap) + 1);
+                }
             #endif
         }
     }

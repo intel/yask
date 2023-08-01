@@ -575,6 +575,20 @@ namespace yask {
 
     }; // real_vec_t.
 
+    // Function for getting copyable data for OMP offload.
+    #if 1
+
+    // For most types, just return the value.
+    template<typename T>
+    inline auto get_copyable(T v) { return v; }
+
+    // Specialize for 'real_vec_t' to return data union only.
+    template<>
+    inline auto get_copyable(real_vec_t v) { return v.u; }
+    #else
+    #define get_copyable(v) v
+    #endif
+    
     // Output using '<<'.
     inline std::ostream& operator<<(std::ostream& os, const real_vec_t& rn) {
         rn.print_reals(os, false);

@@ -204,8 +204,7 @@ void run_tests(int argc, char* argv[]) {
                 
                 break;
             }
-                #if 1
-                // OMP sections across 2 modules not currently supported.
+
             case 3: {
                 os << " by slice on device...\n";
                 assert(VLEN_X * VLEN_Y * VLEN_Z == 1);
@@ -213,7 +212,7 @@ void run_tests(int argc, char* argv[]) {
                 // Copy from var to buffer on host.
                 gb3->get_elements_in_slice(buf, nelem, firsti, lasti, false);
                 gb3f->set_elements_in_slice(buf, nelem, firsti, lasti, false);
-                gb3f->get_vecs_in_slice(buf, nelem, firsti, lasti, false);
+                gb3f->get_vecs_in_slice(buf, firsti, lasti, false);
 
                 #ifndef USE_OFFLOAD_USM
                 gb3f->set_elements_in_slice(buf0, nelem, firsti, lasti, false);
@@ -224,14 +223,12 @@ void run_tests(int argc, char* argv[]) {
                 offload_copy_to_device(buf, nelem);
 
                 // Copy from buffer to var on dev.
-                gb3f->set_vecs_in_slice(buf, nelem, firsti, lasti, true);
+                gb3f->set_vecs_in_slice(buf, firsti, lasti, true);
 
                 // Copy var back to host.
                 gb3f->copy_data_from_device();
                 break;
             }
-                #endif
-                
                 #endif
 
             default:

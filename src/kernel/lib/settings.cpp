@@ -397,14 +397,13 @@ namespace yask {
                            use_shm));
         parser.add_option(make_shared<command_line_parser::bool_option>
                           ("force_scalar_exchange",
-                           "[Debug] Do not allow vectorized halo exchanges.",
+                           "[Debug] Do not allow vectorized halo packing and unpacking.",
                            force_scalar_exchange));
         #endif
         #endif
         parser.add_option(make_shared<command_line_parser::bool_option>
                           ("force_scalar",
-                           "[Debug] Evaluate every var point with scalar stencil operations "
-                           "and exchange halos using only scalar packing and unpacking.",
+                           "[Debug] Do not allow vector stencil computation.",
                            force_scalar));
         parser.add_option(make_shared<command_line_parser::int_option>
                           ("max_threads",
@@ -941,7 +940,7 @@ namespace yask {
             }
             os << " Note: only the nano-block size in the '" <<
                 _dims->_stencil_dims.get_dim_name(_bind_posn) << "' dimension may be used at run-time\n"
-                "  because block-thread binding is enabled on " << num_inner_threads << " block threads.\n";
+                "  because inner-thread data-binding is enabled on " << num_inner_threads << " inner threads.\n";
         }
 
         #ifdef USE_TILING

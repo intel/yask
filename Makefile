@@ -266,18 +266,22 @@ combo-test: $(COMBO_TEST_EXEC)
 	$(RUN_PREFIX) $<
 
 api-tests: compiler-api
-	$(MAKE) combo-api-tests
 	$(YC_MAKE) $@
 	$(YK_MAKE) $@
+	$(MAKE) combo-api-tests
 
-unit-tests:
+common-unit-tests:
 	$(MAKE) tuple-test
 	$(MAKE) combo-test
+
+unit-tests: common-unit-tests
+	$(YC_MAKE) $@
+	$(YK_MAKE) $@
 
 example-tests:
 	$(EX_MAKE) all-tests
 
-all-tests: compiler-api unit-tests
+all-tests: compiler-api common-unit-tests
 	$(YC_MAKE) $@
 	$(YK_MAKE) $@
 	$(MAKE) combo-api-tests

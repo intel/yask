@@ -551,7 +551,12 @@ $(YK_EXT_OBJ_DIR)/%.o: %.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
 # C++-preprocessor rule.
 %.i: %.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
 	g++ -E -CC $(YK_CXX_INCFLAGS) $< > $@
-	@ls -l $@
+	@ls -l `realpath $@`
+
+# Asm rule.
+%.s: %.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS2) -x c++ -S -o $@ $<
+	@ls -l `realpath $@`
 
 ######## Primary targets.
 # NB: must set stencil and arch make vars to generate the desired YASK kernel.
@@ -712,19 +717,19 @@ py-api-no-yc:
 # Make this target before rebuilding YASK with any new parameters.
 clean:
 	rm -fr $(YK_OUT_DIR)
-	rm -fv *.s
+	- find . $(SRC_DIR) -name '*.s' -print -delete
 	- find . $(COMM_DIR) $(COEFF_DIR) -name '*.*.o' -print -delete
 	- find . $(COMM_DIR) $(COEFF_DIR) -name '*.optrpt' -print -delete
 
-# Remove executables, libs, etc.
-# Also remove logs from kernel dir, which are most likely from testing.
+# Remove executables, libs, reports, etc.
 realclean: clean
 	rm -fv $(YK_LIB) $(YK_EXEC) $(MAKE_REPORT_FILE)
 	rm -fv $(YK_PY_MOD)* $(YK_PY_LIB)
 	rm -fv $(YK_API_TEST_EXEC) $(YK_API_TEST_EXEC_WITH_EXCEPTION)
 	rm -fv $(BUILD_OUT_DIR)/*report.txt
-	- find . -name '*.pyc' -print -delete
-	- find . -name '*~' -print -delete
+	rm -fv ./*~
+	- find $(YASK_DIR) -name '*.pyc' -print -delete
+	- find $(SRC_DIR) $(INC_DIR) $(YASK_DIR) $(UTILS_DIR) -name '*~' -print -delete
 
 echo-settings:
 	@echo "Build environment, `date`"; \
@@ -800,11 +805,9 @@ echo-settings:
 	uname -a
 
 # Print stats on inner SIMD loops from asm file.
-code-stats: $(YK_LIB)
-	$(call MK_DIR,$(YK_OBJ_DIR))
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS2) -x c++ -S -o $(YK_OBJ_DIR)/factory.s $(YK_LIB_SRC_DIR)/factory.cpp
+code-stats: $(YK_LIB_SRC_DIR)/factory.s
 	@echo "Code stats for stencil computation:"
-	$(PERL) $(VIEW_ASM) -p -l -f='calc_' $(YK_OBJ_DIR)/factory.s
+	$(PERL) $(VIEW_ASM) -p -l -f='calc_vectors' $(YK_LIB_SRC_DIR)/factory.s
 
 # Print some usage info.
 help:

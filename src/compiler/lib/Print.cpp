@@ -39,7 +39,8 @@ namespace yask {
     // If 'comment' is set, use it for the comment.
     // Return stream to continue w/RHS.
     ostream& PrintVisitorBase::make_next_temp_var(string& res, Expr* ex,
-                                                  string prefix, string comment) {
+                                                  string prefix, string comment,
+                                                  bool use_auto_type) {
         res = _ph.make_var_name(prefix);
         if (ex) {
             _temp_vars[ex] = res;
@@ -48,7 +49,8 @@ namespace yask {
         }
         if (comment.length())
             _os << endl << " // " << res << " = " << comment << "." << endl;
-        _os << _ph.get_line_prefix() << _ph.get_var_type() << " " << res << " = ";
+        string vtype = use_auto_type ? "auto" : _ph.get_var_type();
+        _os << _ph.get_line_prefix() << vtype << " " << res << " = ";
         return _os;
     }
 

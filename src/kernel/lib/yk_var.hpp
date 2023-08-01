@@ -180,9 +180,9 @@ namespace yask {
             // Special handling for step index.
             constexpr auto sp = +step_posn;
             if constexpr (_use_step_idx && i == sp) {
-                host_assert(alloc_step_idx == _wrap_step(idxs[sp]));
-                adj_idxs[i] = alloc_step_idx;
-            }
+                    host_assert(alloc_step_idx == _wrap_step(idxs[sp]));
+                    adj_idxs[i] = alloc_step_idx;
+                }
 
             // All other indices.
             else {
@@ -228,8 +228,8 @@ namespace yask {
         }
         ALWAYS_INLINE
         const real_t* get_elem_ptr_local(const Indices& local_idxs,
-                                   idx_t alloc_step_idx,
-                                   bool check_bounds=true) const {
+                                         idx_t alloc_step_idx,
+                                         bool check_bounds=true) const {
             return _get_elem_ptr<false>(local_idxs, alloc_step_idx, check_bounds);
         }
 
@@ -278,7 +278,7 @@ namespace yask {
         // Indices are local.
         ALWAYS_INLINE
         real_t read_elem_local(const Indices& idxs,
-                         idx_t alloc_step_idx) const {
+                               idx_t alloc_step_idx) const {
             const real_t* ep = get_elem_ptr_local(idxs, alloc_step_idx);
             return *ep;
         }
@@ -287,8 +287,8 @@ namespace yask {
         // Indices are local.
         ALWAYS_INLINE
         void write_elem_local(real_t val,
-                        const Indices& idxs,
-                        idx_t alloc_step_idx) {
+                              const Indices& idxs,
+                              idx_t alloc_step_idx) {
             real_t* ep = get_elem_ptr_local(idxs, alloc_step_idx);
             *ep = val;
         }
@@ -329,10 +329,10 @@ namespace yask {
             // Special handling for step index.
             constexpr auto sp = +step_posn;
             if constexpr (_use_step_idx && i == sp) {
-                host_assert(alloc_step_idx == _wrap_step(idxs[sp]));
-                vec_idxs[sp] = alloc_step_idx;
-                elem_ofs[sp] = 0;
-            }
+                    host_assert(alloc_step_idx == _wrap_step(idxs[sp]));
+                    vec_idxs[sp] = alloc_step_idx;
+                    elem_ofs[sp] = 0;
+                }
 
             // All other indices.
             else {
@@ -578,7 +578,7 @@ namespace yask {
         idx_t _num_domain_dims;
         idx_t _num_misc_dims;
 
-         // Whether step dim is used.
+        // Whether step dim is used.
         // If true, will always be in step_posn.
         bool _has_step_dim = false;
 
@@ -894,47 +894,127 @@ namespace yask {
         virtual void set_all_elements_same(double val) =0;
 
         // Set/get_elements_in_slice().
-        idx_t set_elements_in_slice_same(double val,
+        virtual idx_t set_elements_in_slice_same(double val,
+                                                 const Indices& first_indices,
+                                                 const Indices& last_indices,
+                                                 bool strict_indices,
+                                                 bool on_device) =0;
+        virtual idx_t set_elements_in_slice(const double* buffer_ptr,
+                                            size_t buffer_size,
+                                            const Indices& first_indices,
+                                            const Indices& last_indices,
+                                            bool on_device) =0;
+        virtual idx_t set_elements_in_slice(const float* buffer_ptr,
+                                            size_t buffer_size,
+                                            const Indices& first_indices,
+                                            const Indices& last_indices,
+                                            bool on_device) =0;
+        idx_t set_elements_in_slice_void(const void* buffer_ptr,
                                          const Indices& first_indices,
                                          const Indices& last_indices,
-                                         bool strict_indices,
-                                         bool on_device);
-        idx_t set_elements_in_slice(const double* buffer_ptr,
-                                    size_t buffer_size,
-                                    const Indices& first_indices,
-                                    const Indices& last_indices,
-                                    bool on_device);
-        idx_t set_elements_in_slice(const float* buffer_ptr,
-                                    size_t buffer_size,
-                                    const Indices& first_indices,
-                                    const Indices& last_indices,
-                                    bool on_device);
-        idx_t set_elements_in_slice(const void* buffer_ptr,
-                                    const Indices& first_indices,
-                                    const Indices& last_indices,
-                                    bool on_device);
-        idx_t get_elements_in_slice(double* buffer_ptr,
-                                    size_t buffer_size,
-                                    const Indices& first_indices,
-                                    const Indices& last_indices,
-                                    bool on_device) const;
-        idx_t get_elements_in_slice(float* buffer_ptr,
-                                    size_t buffer_size,
-                                    const Indices& first_indices,
-                                    const Indices& last_indices,
-                                    bool on_device) const;
-        idx_t get_elements_in_slice(void* buffer_ptr,
-                                    const Indices& first_indices,
-                                    const Indices& last_indices,
-                                    bool on_device) const;
+                                         bool on_device) {
+            #if REAL_BYTES == 8
+            return set_elements_in_slice((double*)buffer_ptr, IDX_MAX,
+                                         first_indices, last_indices,
+                                         on_device);
+            #elif (REAL_BYTES == 4)
+            return set_elements_in_slice((float*)buffer_ptr, IDX_MAX,
+                                         first_indices, last_indices,
+                                         on_device);
+            #else
+            #error Unsupported REAL_BYTES
+            #endif
+        }
 
+        virtual idx_t get_elements_in_slice(double* buffer_ptr,
+                                            size_t buffer_size,
+                                            const Indices& first_indices,
+                                            const Indices& last_indices,
+                                            bool on_device) const =0;
+        virtual idx_t get_elements_in_slice(float* buffer_ptr,
+                                            size_t buffer_size,
+                                            const Indices& first_indices,
+                                            const Indices& last_indices,
+                                            bool on_device) const =0;
+        idx_t get_elements_in_slice_void(void* buffer_ptr,
+                                         const Indices& first_indices,
+                                         const Indices& last_indices,
+                                         bool on_device) const {
+            #if REAL_BYTES == 8
+            return get_elements_in_slice((double*)buffer_ptr, IDX_MAX,
+                                         first_indices, last_indices,
+                                         on_device);
+            #elif (REAL_BYTES == 4)
+            return get_elements_in_slice((float*)buffer_ptr, IDX_MAX,
+                                         first_indices, last_indices,
+                                         on_device);
+            #else
+            #error Unsupported REAL_BYTES
+            #endif
+        }
+
+        // Reduction result.
+        class red_res : public yk_var::yk_reduction_result {
+
+        protected:
+            char _pad[CACHELINE_BYTES]; // prevent false sharing.
+
+        public:
+            int _mask = 0;
+            idx_t _nred = 0;
+            double _sum = 0.0;
+            double _sum_sq = 0.0;
+            double _prod = 1.0;
+            double _max = DBL_MIN;
+            double _min = DBL_MAX;
+
+            virtual ~red_res() { }
+        
+            /// Get the allowed reductions.
+            int get_reduction_mask() const {
+                return _mask;
+            }
+        
+            /// Get the number of elements reduced.
+            idx_t get_num_elements_reduced() const {
+                return _nred;
+            }
+        
+            /// Get results
+            double get_sum() const {
+                if (_mask & yk_var::yk_sum_reduction)
+                    return _sum;
+                THROW_YASK_EXCEPTION("Sum reduction result was not requested in reduction_mask");
+            }
+            double get_sum_squares() const {
+                if (_mask & yk_var::yk_sum_squares_reduction)
+                    return _sum;
+                THROW_YASK_EXCEPTION("Sum-of-squares reduction result was not requested in reduction_mask");
+            }
+            double get_product() const {
+                if (_mask & yk_var::yk_product_reduction)
+                    return _prod;
+                THROW_YASK_EXCEPTION("Product reduction result was not requested in reduction_mask");
+            }
+            double get_max() const {
+                if (_mask & yk_var::yk_max_reduction)
+                    return _max;
+                THROW_YASK_EXCEPTION("Max reduction result was not requested in reduction_mask");
+            }
+            double get_min() const {
+                if (_mask & yk_var::yk_sum_reduction)
+                    return _min;
+                THROW_YASK_EXCEPTION("Min reduction result was not requested in reduction_mask");
+            }
+        };
+        
         // Reductions.
-        yk_var::yk_reduction_result_ptr
+        virtual yk_var::yk_reduction_result_ptr
         reduce_elements_in_slice(int reduction_mask,
                                  const Indices& first_indices,
                                  const Indices& last_indices,
                                  bool strict_indices,
-                                 bool on_device) const;
+                                 bool on_device) const =0;
 
         // Possibly vectorized version of set/get_elements_in_slice().
         virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
@@ -994,15 +1074,17 @@ namespace yask {
         // Visitor should implement the following:
         //  static const char* fname();  // name of calling function.
         //  static void visit(YkVarBase* varp,  // 'this' ptr.
-        //                    real_t* p,  // copy of 'buffer_ptr'.
-        //                    idx_t pofs, // offset into buffer.
+        //                    T* p,  // copy of 'buffer_ptr', if needed.
+        //                    idx_t pofs, // offset into buffer, if needed.
+        //                    T val, // some value, if needed.
         //                    const Indices& pt, // point in 'this' var.
         //                    idx_t ti,  // precomputed step index.
         //                    int thread); // thread number.
-        template<typename Visitor, typename T>
+        template<typename Visitor, typename T, typename VarT>
         idx_t _visit_elements_in_slice(bool strict_indices,
                                        T* buffer_ptr,
                                        size_t buffer_size,
+                                       T val,
                                        const Indices& in_first_indices,
                                        const Indices& in_last_indices,
                                        bool on_device) {
@@ -1109,7 +1191,9 @@ namespace yask {
                                  #endif
                              
                                  // Call visitor.
-                                 Visitor::visit(this, buffer_ptr, bofs, pt, ti, thread);
+                                 Visitor::visit(static_cast<VarT*>(this),
+                                                buffer_ptr, bofs, val,
+                                                pt, ti, thread);
 
                                  // Advance to next point.
                                  if (ndims_left)
@@ -1120,7 +1204,7 @@ namespace yask {
                          });
                 }
         
-                // Visit points in slice on device.
+                // TBD: Visit points in slice on device.
                 else {
                     THROW_YASK_EXCEPTION(std::string("(internal fault) '") +
                                          Visitor::fname() + "' for var '" +
@@ -1133,10 +1217,10 @@ namespace yask {
             } // steps.
             TRACE_MSG(Visitor::fname() << " returns " << ne);
             return ne;
-        }
+        } // _visit_elements_in_slice();
 
         // Read into buffer from *this.
-        template<typename T>
+        template<typename T, typename VarT>
         idx_t _get_elements_in_slice(T* buffer_ptr,
                                      size_t buffer_size,
                                      const Indices& first_indices,
@@ -1151,8 +1235,8 @@ namespace yask {
 
                 // Copy from the var to the buffer.
                 ALWAYS_INLINE
-                static void visit(YkVarBase* varp,
-                                  T* p, idx_t pofs,
+                static void visit(VarT* varp,
+                                  T* p, idx_t pofs, T v,
                                   const Indices& pt, idx_t ti,
                                   int thread) {
 
@@ -1171,16 +1255,16 @@ namespace yask {
                 const_copy_data_from_device();
         
             // Call the generic visit.
-            auto n = const_cast<YkVarBase*>(this)->
-                _visit_elements_in_slice<GetElem, T>(true, buffer_ptr, buffer_size,
-                                                     first_indices, last_indices, on_device);
+            auto n = dynamic_cast<VarT*>(const_cast<YkVarBase*>(this))->template
+                _visit_elements_in_slice<GetElem, T, VarT>(true, buffer_ptr, buffer_size, 0,
+                                                           first_indices, last_indices, on_device);
 
             // Return number of writes.
             return n;
         }
 
         // Write to *this from buffer.
-        template<typename T>
+        template<typename T, typename VarT>
         idx_t _set_elements_in_slice(const T* buffer_ptr,
                                      size_t buffer_size,
                                      const Indices& first_indices,
@@ -1195,8 +1279,8 @@ namespace yask {
 
                 // Copy from the buffer to the var.
                 ALWAYS_INLINE
-                static void visit(YkVarBase* varp,
-                                  T* p, idx_t pofs,
+                static void visit(VarT* varp,
+                                  T* p, idx_t pofs, T v,
                                   const Indices& pt, idx_t ti,
                                   int thread) {
 
@@ -1214,9 +1298,9 @@ namespace yask {
                 const_copy_data_from_device();
         
             // Call the generic visit.
-            auto n = 
-                _visit_elements_in_slice<SetElem, T>(true, (T*)buffer_ptr, buffer_size,
-                                                     first_indices, last_indices, on_device);
+            auto n = dynamic_cast<VarT*>(this)->template
+                _visit_elements_in_slice<SetElem, T, VarT>(true, (T*)buffer_ptr, buffer_size, 0,
+                                                           first_indices, last_indices, on_device);
             
             // Set appropriate dirty flags.
             if (on_device)
@@ -1228,7 +1312,137 @@ namespace yask {
             // Return number of writes.
             return n;
         }
+
+        // Write to *this from 'val'.
+        template<typename T, typename VarT>
+        idx_t _set_elements_in_slice_same(T val,
+                                          const Indices& first_indices,
+                                          const Indices& last_indices,
+                                          bool strict_indices,
+                                          bool on_device) {
+            // A specialized visitor.
+            struct SetElem {
+                static const char* fname() {
+                    return "set_elements_in_slice_same";
+                }
+
+                // Set the var.
+                ALWAYS_INLINE
+                static void visit(VarT* varp,
+                                  T* p, idx_t pofs, T val,
+                                  const Indices& pt, idx_t ti,
+                                  int thread) {
+
+                    // Write val to var
+                    varp->write_elem(val, pt, ti, __LINE__);
+                }
+            };
+
+            if (on_device)
+                const_copy_data_to_device();
+            else
+                const_copy_data_from_device();
         
+            // Call the generic visit.
+            auto n = dynamic_cast<VarT*>(this)->template
+                _visit_elements_in_slice<SetElem, T, VarT>(strict_indices,
+                                                           (T*)-1, IDX_MAX, val,
+                                                           first_indices, last_indices,
+                                                           on_device);
+            
+            // Set appropriate dirty flags.
+            if (on_device)
+                _coh.mod_dev();
+            else
+                _coh.mod_host();
+            set_dirty_in_slice(first_indices, last_indices);
+
+            // Return number of writes.
+            return n;
+        }
+    
+        // Perform reduction(s).
+        template<typename T, typename VarT>
+        yk_var::yk_reduction_result_ptr
+        _reduce_elements_in_slice(int reduction_mask,
+                                  const Indices& first_indices,
+                                  const Indices& last_indices,
+                                  bool strict_indices,
+                                  bool on_device) const {
+            // A specialized visitor.
+            struct RedElem {
+                static const char* fname() {
+                    return "reduce_elements_in_slice";
+                }
+
+                // Do the reduction(s).
+                ALWAYS_INLINE
+                static void visit(VarT* varp,
+                                  T* p, idx_t pofs, T v,
+                                  const Indices& pt, idx_t ti,
+                                  int thread) {
+
+                    // Get value, converting to double if needed.
+                    double val = varp->read_elem(pt, ti, __LINE__);
+
+                    // Use p as a pointer to the result for this thread.
+                    // TODO: clean up this cast.
+                    red_res* resa = (red_res*)p;
+                    assert(thread < yask_get_num_threads());
+                    red_res* resp = resa + thread;
+
+                    // Do desired reduction(s).
+                    int mask = resp->_mask;
+                    if (mask & yk_var::yk_sum_reduction)
+                        resp->_sum += val;
+                    if (mask & yk_var::yk_sum_squares_reduction)
+                        resp->_sum_sq += val * val;
+                    if (mask & yk_var::yk_product_reduction)
+                        resp->_prod *= val;
+                    if (mask & yk_var::yk_max_reduction)
+                        resp->_max = std::max(resp->_max, val);
+                    if (mask & yk_var::yk_min_reduction)
+                        resp->_min = std::min(resp->_min, val);
+                }
+            };
+
+            if (on_device)
+                const_copy_data_to_device();
+            else
+                const_copy_data_from_device();
+
+            // Make array of results, one for each thread,
+            // so we don't have to use atomics or critical sections.
+            int nthr = yask_get_num_threads();
+            red_res resa[nthr];
+            for (int i = 0; i < nthr; i++)
+                resa[i]._mask = reduction_mask;
+        
+            // Call the generic visit.
+            // TODO: clean up ptr cast.
+            auto n = dynamic_cast<VarT*>(const_cast<YkVarBase*>(this))->template
+                _visit_elements_in_slice<RedElem, T, VarT>(strict_indices,
+                                                           (T*)resa, IDX_MAX, 0,
+                                                           first_indices, last_indices,
+                                                           on_device);
+
+            // Make final result.
+            auto resp = std::make_shared<red_res>();
+            resp->_mask = reduction_mask;
+            resp->_nred = n;
+
+            // Join per-thread results.
+            for (int i = 0; i < nthr; i++) {
+                auto* p = resp.get();
+                p->_sum += resa[i]._sum;
+                p->_sum_sq += resa[i]._sum;
+                p->_prod *= resa[i]._prod;
+                p->_max = std::max(p->_max, resa[i]._max);
+                p->_min = std::min(p->_min, resa[i]._min);
+            }
+
+            return resp;
+        }      
         
     }; // YkVarBase.
     typedef std::shared_ptr<YkVarBase> VarBasePtr;
@@ -1372,28 +1586,91 @@ namespace yask {
             #endif
         }
 
-        // Non-vectorized fall-back versions.
-        virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
-                                        const Indices& first_indices,
-                                        const Indices& last_indices,
-                                        bool on_device) override {
-            return set_elements_in_slice(buffer_ptr,
-                                         first_indices, last_indices, on_device);
-        }
-        virtual idx_t get_vecs_in_slice(void* buffer_ptr,
-                                        const Indices& first_indices,
-                                        const Indices& last_indices,
-                                        bool on_device) const override {
-            return get_elements_in_slice(buffer_ptr,
-                                         first_indices, last_indices, on_device);
-       }
-
         // Get strides in underlying storage.
         // This will be element strides in this class.
         virtual Indices get_vec_strides() const override {
             return _data.get_strides();
         }
 
+        // Non-vectorized fall-back versions.
+        virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
+                                        const Indices& first_indices,
+                                        const Indices& last_indices,
+                                        bool on_device) override {
+            return YkVarBase::set_elements_in_slice_void(buffer_ptr,
+                                                         first_indices, last_indices, on_device);
+        }
+        virtual idx_t get_vecs_in_slice(void* buffer_ptr,
+                                        const Indices& first_indices,
+                                        const Indices& last_indices,
+                                        bool on_device) const override {
+            return YkVarBase::get_elements_in_slice_void(buffer_ptr,
+                                                         first_indices, last_indices, on_device);
+        }
+
+        // Read into buffer from *this.
+        virtual idx_t get_elements_in_slice(double* buffer_ptr,
+                                            size_t buffer_size,
+                                            const Indices& first_indices,
+                                            const Indices& last_indices,
+                                            bool on_device) const override {
+            return _get_elements_in_slice<double, YkElemVar>(buffer_ptr, buffer_size,
+                                                             first_indices, last_indices,
+                                                             on_device);
+        }
+        virtual idx_t get_elements_in_slice(float* buffer_ptr,
+                                            size_t buffer_size,
+                                            const Indices& first_indices,
+                                            const Indices& last_indices,
+                                            bool on_device) const override {
+            return _get_elements_in_slice<float, YkElemVar>(buffer_ptr, buffer_size,
+                                                            first_indices, last_indices,
+                                                            on_device);
+        }
+
+        // Write to *this from buffer.
+        virtual idx_t set_elements_in_slice(const double* buffer_ptr,
+                                            size_t buffer_size,
+                                            const Indices& first_indices,
+                                            const Indices& last_indices,
+                                            bool on_device) override {
+            return _set_elements_in_slice<double, YkElemVar>(buffer_ptr, buffer_size,
+                                                             first_indices, last_indices,
+                                                             on_device);
+        }
+        virtual idx_t set_elements_in_slice(const float* buffer_ptr,
+                                            size_t buffer_size,
+                                            const Indices& first_indices,
+                                            const Indices& last_indices,
+                                            bool on_device) override {
+            return _set_elements_in_slice<float, YkElemVar>(buffer_ptr, buffer_size,
+                                                            first_indices, last_indices,
+                                                            on_device);
+        }
+
+        // Write to *this from val.
+        virtual idx_t set_elements_in_slice_same(double val,
+                                                 const Indices& first_indices,
+                                                 const Indices& last_indices,
+                                                 bool strict_indices,
+                                                 bool on_device) override {
+            return _set_elements_in_slice_same<double, YkElemVar>(val,
+                                                                  first_indices, last_indices,
+                                                                  strict_indices, on_device);
+        }
+        
+        // Reduce elements.
+        virtual yk_var::yk_reduction_result_ptr
+        reduce_elements_in_slice(int reduction_mask,
+                                 const Indices& first_indices,
+                                 const Indices& last_indices,
+                                 bool strict_indices,
+                                 bool on_device) const override {
+            return _reduce_elements_in_slice<double, YkElemVar>(reduction_mask,
+                                                                first_indices, last_indices,
+                                                                strict_indices, on_device);
+        }
+        
     };                          // YkElemVar.
 
     // YASK var of real vectors.
@@ -1439,7 +1716,7 @@ namespace yask {
             _data.sync_data_ptr();
         }
         
-   public:
+    public:
         YkVecVar(KernelStateBase& stateb,
                  const std::string& name,
                  const VarDimNames& dim_names) :
@@ -1448,7 +1725,7 @@ namespace yask {
             _data(stateb, &_core._data, name, dim_names) {
             STATE_VARS(this);
             TRACE_MSG("creating vector-var '" + get_name() + "'");
-           _has_step_dim = _use_step_idx;
+            _has_step_dim = _use_step_idx;
 
             // Template vec lengths.
             const int nvls = sizeof...(_templ_vec_lens);
@@ -1559,7 +1836,7 @@ namespace yask {
                         idx_t alloc_step_idx,
                         int line) override final {
             _core.write_elem(val, idxs, alloc_step_idx);
-             #ifdef TRACE_MEM
+            #ifdef TRACE_MEM
             print_elem("write_elem", idxs, val, line);
             #endif
         }
@@ -1731,27 +2008,27 @@ namespace yask {
 
                 // Visit starting points in range on host in parallel.
                 else {
-                vec_range.visit_all_points_in_parallel
-                    (false,
-                     [&](const Indices& ofs, size_t idx, int thread) {
+                    vec_range.visit_all_points_in_parallel
+                        (false,
+                         [&](const Indices& ofs, size_t idx, int thread) {
 
-                         // Init vars for first point.
-                         auto pt = firstv.add_elements(ofs);
-                         auto* vp = core_p->get_vec_ptr_norm(pt, ti);
-                         idx_t bofs = tofs + idx * ni;
+                             // Init vars for first point.
+                             auto pt = firstv.add_elements(ofs);
+                             auto* vp = core_p->get_vec_ptr_norm(pt, ti);
+                             idx_t bofs = tofs + idx * ni;
  
-                         // Inner loop.
-                         for (idx_t i = 0; i < ni; i++) {
+                             // Inner loop.
+                             for (idx_t i = 0; i < ni; i++) {
                              
-                             // Do the copy operation specified in visitor.
-                             Visitor::do_copy(((real_vec_t*)buffer_ptr), bofs, vp);
+                                 // Do the copy operation specified in visitor.
+                                 Visitor::do_copy(((real_vec_t*)buffer_ptr), bofs, vp);
                              
-                             // Next point in buffer and var.
-                             vp += si;
-                             bofs++;
-                         }
-                         return true;    // keep going.
-                     });
+                                 // Next point in buffer and var.
+                                 vp += si;
+                                 bofs++;
+                             }
+                             return true;    // keep going.
+                         });
                 }
 
                 // Skip to next step in buffer.
@@ -1849,6 +2126,69 @@ namespace yask {
             return _data.get_strides();
         }
 
+        // Read into buffer from *this.
+        virtual idx_t get_elements_in_slice(double* buffer_ptr,
+                                            size_t buffer_size,
+                                            const Indices& first_indices,
+                                            const Indices& last_indices,
+                                            bool on_device) const override {
+            return _get_elements_in_slice<double, YkVecVar>(buffer_ptr, buffer_size,
+                                                            first_indices, last_indices,
+                                                            on_device);
+        }
+        virtual idx_t get_elements_in_slice(float* buffer_ptr,
+                                            size_t buffer_size,
+                                            const Indices& first_indices,
+                                            const Indices& last_indices,
+                                            bool on_device) const override {
+            return _get_elements_in_slice<float, YkVecVar>(buffer_ptr, buffer_size,
+                                                           first_indices, last_indices,
+                                                           on_device);
+        }
+
+        // Write to *this from buffer.
+        virtual idx_t set_elements_in_slice(const double* buffer_ptr,
+                                            size_t buffer_size,
+                                            const Indices& first_indices,
+                                            const Indices& last_indices,
+                                            bool on_device) override {
+            return _set_elements_in_slice<double, YkVecVar>(buffer_ptr, buffer_size,
+                                                            first_indices, last_indices,
+                                                            on_device);
+        }
+        virtual idx_t set_elements_in_slice(const float* buffer_ptr,
+                                            size_t buffer_size,
+                                            const Indices& first_indices,
+                                            const Indices& last_indices,
+                                            bool on_device) override {
+            return _set_elements_in_slice<float, YkVecVar>(buffer_ptr, buffer_size,
+                                                           first_indices, last_indices,
+                                                           on_device);
+        }
+
+        // Write to *this from val.
+        virtual idx_t set_elements_in_slice_same(double val,
+                                                 const Indices& first_indices,
+                                                 const Indices& last_indices,
+                                                 bool strict_indices,
+                                                 bool on_device) override {
+            return _set_elements_in_slice_same<double, YkVecVar>(val,
+                                                                 first_indices, last_indices,
+                                                                 strict_indices, on_device);
+        }
+        
+        // Reduce elements.
+        virtual yk_var::yk_reduction_result_ptr
+        reduce_elements_in_slice(int reduction_mask,
+                                 const Indices& first_indices,
+                                 const Indices& last_indices,
+                                 bool strict_indices,
+                                 bool on_device) const override {
+            return _reduce_elements_in_slice<double, YkVecVar>(reduction_mask,
+                                                               first_indices, last_indices,
+                                                               strict_indices, on_device);
+        }
+        
     };                          // YkVecVar.
 
     // Implementation of yk_var interface.  Class contains no real data,
@@ -1979,15 +2319,15 @@ namespace yask {
         #define GET_VAR_API(api_name)                                   \
             virtual idx_t api_name(const std::string& dim) const;       \
             virtual idx_t api_name(int posn) const;
-        #define GET_VAR_API2(api_name)                                  \
-            GET_VAR_API(api_name)                                       \
+        #define GET_VAR_API2(api_name)                  \
+            GET_VAR_API(api_name)                       \
             virtual idx_t_vec api_name ## _vec() const;
         #define SET_VAR_API(api_name)                                   \
             virtual void api_name(const std::string& dim, idx_t n);     \
             virtual void api_name(int posn, idx_t n);
-        #define SET_VAR_API2(api_name)                                  \
-            SET_VAR_API(api_name)                                       \
-            virtual void api_name ## _vec(idx_t_vec);                   \
+        #define SET_VAR_API2(api_name)                          \
+            SET_VAR_API(api_name)                               \
+            virtual void api_name ## _vec(idx_t_vec);           \
             virtual void api_name ## _vec(idx_t_init_list);
 
         // Settings that should never be exposed as APIs because
@@ -2104,8 +2444,8 @@ namespace yask {
                                             const Indices& first_indices,
                                             const Indices& last_indices,
                                             bool on_device) const {
-            return gb().get_elements_in_slice(buffer_ptr,
-                                              first_indices, last_indices, on_device);
+            return gb().get_elements_in_slice_void(buffer_ptr,
+                                                   first_indices, last_indices, on_device);
         }
         virtual idx_t get_elements_in_slice(double* buffer_ptr,
                                             size_t buffer_size,
@@ -2224,8 +2564,8 @@ namespace yask {
                                             const Indices& first_indices,
                                             const Indices& last_indices,
                                             bool on_device) {
-            return gb().set_elements_in_slice(buffer_ptr,
-                                              first_indices, last_indices, on_device);
+            return gb().set_elements_in_slice_void(buffer_ptr,
+                                                   first_indices, last_indices, on_device);
         }
         virtual idx_t set_elements_in_slice(const double* buffer_ptr,
                                             size_t buffer_size,

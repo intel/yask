@@ -572,7 +572,7 @@ int main(int argc, char** argv) {
         auto ydur = ystats->get_elapsed_secs();
         os << fixed << setprecision(2) <<
             "Duration (s): " << dur << endl <<
-            "Rate (ms/step): " << (1e3 * dur / (nt+1)) << endl <<
+            "Rate (ms/step): " << (1e3 * dur / nt) << endl <<
             "Time in YASK kernel (s): " << ydur <<
             " (" << (100. * ydur / dur) << "%)" << endl <<
             flush;
