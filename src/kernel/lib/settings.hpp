@@ -720,7 +720,7 @@ namespace yask {
         int get_num_comp_threads(int& outer_threads, int& inner_threads) const;
 
         // Set number of threads to use for a mega-block.
-        // Enable nested OMP if there are >1 block threads,
+        // Enable nested OMP if there are >1 inner threads,
         // disable otherwise.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.

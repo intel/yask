@@ -200,7 +200,7 @@ namespace yask {
                     TRACE_MSG("reqd part '" << rp->get_name() << "': " <<
                               mb_idxs3.make_range_str(true) <<
                               " via outer thread " << outer_thread_idx <<
-                              " with " << nbt << " block thread(s) bound to data...");
+                              " with " << nbt << " inner thread(s) bound to data...");
 
                     // Start threads within a block.  Each of these threads
                     // will eventually work on a separate nano-block.  This
@@ -210,7 +210,7 @@ namespace yask {
                         assert(omp_get_num_threads() == nbt);
                         int inner_thread_idx = omp_get_thread_num();
 
-                        // Run the micro-block loops on all block threads and
+                        // Run the micro-block loops on all inner threads and
                         // call calc_nano_block() only by the designated
                         // thread for the given slab index in the binding
                         // dim. This is an explicit replacement for "normal"
@@ -249,7 +249,7 @@ namespace yask {
                     TRACE_MSG("reqd part '" << rp->get_name() << "': " <<
                               mb_idxs3.make_range_str(true) << 
                               " via outer thread " << outer_thread_idx <<
-                              " with " << nbt << " block thread(s) NOT bound to data...");
+                              " with " << nbt << " inner thread(s) NOT bound to data...");
 
                     // Call calc_nano_block() with a different thread for
                     // each nano-block using standard OpenMP scheduling.
