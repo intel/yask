@@ -721,8 +721,7 @@ clean:
 	- find . $(COMM_DIR) $(COEFF_DIR) -name '*.*.o' -print -delete
 	- find . $(COMM_DIR) $(COEFF_DIR) -name '*.optrpt' -print -delete
 
-# Remove executables, libs, etc.
-# Also remove logs from kernel dir, which are most likely from testing.
+# Remove executables, libs, reports, etc.
 realclean: clean
 	rm -fv $(YK_LIB) $(YK_EXEC) $(MAKE_REPORT_FILE)
 	rm -fv $(YK_PY_MOD)* $(YK_PY_LIB)
