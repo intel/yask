@@ -184,7 +184,8 @@ namespace yask {
         // If 'comment' is set, use it for the comment.
         // Return stream to continue w/RHS.
         virtual ostream& make_next_temp_var(string& res, Expr* ex,
-                                            string prefix, string comment);
+                                            string prefix, string comment,
+                                            bool use_auto_type = false);
 
     public:
         // os is used for printing intermediate results as needed.

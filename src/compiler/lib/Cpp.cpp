@@ -1269,7 +1269,6 @@ namespace yask {
     }
 
     // Print loop-invariant data values for each VarPoint.
-    // TODO: fix warning from loading invariant real_vec_t outside of OMP device region.
     string CppPreLoopPrintDataVisitor::visit(VarPoint* gp) {
         assert(gp);
 
@@ -1281,9 +1280,9 @@ namespace yask {
 
             // Not already loaded?
             if (!_cvph.lookup_point_var(*gp)) {
-                string expr = _ph.read_from_point(_os, *gp);
+                string expr = string("get_copyable(") + _ph.read_from_point(_os, *gp) + ")";
                 string res;
-                make_next_temp_var(res, gp, "expr", "") << expr << _ph.get_line_suffix();
+                make_next_temp_var(res, gp, "expr", "", true) << expr << _ph.get_line_suffix();
 
                 // Save for future use.
                 _cvph.save_point_var(*gp, res);
