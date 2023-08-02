@@ -857,25 +857,21 @@ help:
 first_test	:=	0
 last_test	:=	999
 
-# Default threads.
-ifeq ($(offload),1)
-outer_threads	:=	2
-inner_threads	:=	2
-else
-outer_threads	:=	8
-inner_threads	:=	2
-endif
-
 TEST_MAKE_ARGS	:=	real_bytes=8 use_rcp=0 allow_new_var_types=0 trace=1
 TEST_MAKE 	:=	$(MAKE) $(TEST_MAKE_ARGS)
 
-# Makefile functions for folding.
+# Define makefile functions for folding.
+# Set default threads.
 # Disable folding and checking for offload testing.
 ifeq ($(offload),1)
 FOLD		=
+outer_threads	:=	2
+inner_threads	:=	2
 else
-FOLD		=	fold=$(subst $(space),$(comma),$(1))
 TEST_MAKE_ARGS	+=	check=1
+FOLD		=	fold=$(subst $(space),$(comma),$(1))
+outer_threads	:=	8
+inner_threads	:=	2
 endif
 
 ### Unit tests.
