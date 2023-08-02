@@ -142,10 +142,10 @@ struct MySettings {
 
         // Show settings.
         ostringstream oss;
-        oss << "Options from the '" << pgm_name << "' binary:\n";
+        oss << "Current settings from the '" << pgm_name << "' binary:\n";
         parser.print_values(oss);
         auto cvals = csoln->get_command_line_values();
-        oss << "Options from the YASK compiler library:\n" <<
+        oss << "Current settings from the YASK compiler library:\n" <<
             cvals;
        
         if (rem_args2.length())
