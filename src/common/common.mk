@@ -190,9 +190,7 @@ ifeq ($(offload),1)
 endif
 
 # Base compiler flags for building kernel lib and apps.
-ifeq ($(offload),1)
- YK_CXXDBG	:=	-gline-tables-only
-else
+ifeq ($(offload),0)
  YK_CXXDBG	:=	-g
 endif
 YK_CXXOPT	:=	-O3

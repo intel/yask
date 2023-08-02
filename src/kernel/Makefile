@@ -42,6 +42,7 @@ use_ptrs		?=	1
 use_safe_ptrs		?=	0
 outer_domain_layout	?=	0
 inner_misc_layout 	?=	1
+first_inner		?=	1
 early_loads		?=	0
 min_buffer_len		?=	1
 trace			?=	0
@@ -58,7 +59,6 @@ ifeq ($(offload),1)
  pfd_l1		:=	0
  pfd_l2		:=	0
  inner_loop_dim :=	1
- early_loads	:=	1
  outer_domain_layout	:=	1
 endif
 
@@ -189,6 +189,11 @@ ifeq ($(inner_misc_layout),1)
  YC_FLAGS	+=	-inner-misc-layout
 else
  YC_FLAGS	+=	-no-inner-misc-layout
+endif
+ifeq ($(first_inner),1)
+ YC_FLAGS	+=	-first-inner
+else
+ YC_FLAGS	+=	-no-first-inner
 endif
 ifeq ($(early_loads),1)
  YC_FLAGS	+=	-early-loads
@@ -346,8 +351,7 @@ endif
 # Compiler-specific settings.
 
 # Create a compiler invocation to test for macro settings.
-# Use the flags defined so far.
-YK_CXX_TEST 	:= 	$(YK_CXX) $(YK_CXXFLAGS)
+YK_CXX_TEST 	:= 	$(YK_CXX)
 cxx_is_llvm_intel :=	$(call MACRO_DEF,$(YK_CXX_TEST),__INTEL_LLVM_COMPILER)
 cxx_is_clang	:=	$(call MACRO_DEF,$(YK_CXX_TEST),__clang__)
 cxx_is_intel	:=	$(call MACRO_DEF,$(YK_CXX_TEST),__INTEL_COMPILER)
@@ -356,8 +360,8 @@ cxx_is_gnu	:= 	$(call MACRO_DEF,$(YK_CXX_TEST),__GNUC__)
 # LLVM-based Intel compiler (icpx).
 ifeq ($(cxx_is_llvm_intel),1)
  YK_CXXFLAGS2	+=	$(GXX_ISA) $(ICC_ISA)
- ifeq ($(check),0)
-  YK_CXXDBG2	+=	-gline-tables-only
+ ifeq ($(offload),1)
+  YK_CXXDBG2	:=	-gline-tables-only
  endif
  YK_CXXDBG2	+=	-fdebug-info-for-profiling
  YK_CXXFLAGS2	+=	-ansi-alias \
@@ -763,8 +767,13 @@ echo-settings:
 	echo YK_TAG=$(YK_TAG); \
 	echo YK_CXXVER=`$(YK_CXX) --version`; \
 	echo arch=$(arch); \
+	echo cxx_is_llvm_intel=$(cxx_is_llvm_intel); \
+	echo cxx_is_clang=$(cxx_is_clang); \
+	echo cxx_is_intel=$(cxx_is_intel); \
+	echo cxx_is_gnu=$(cxx_is_gnu); \
 	echo fold=$(fold); \
 	echo offload=$(offload); \
+	echo offload_arch=$(offload_arch); \
 	echo offload_usm=$(offload_usm); \
 	echo pfd_l1=$(pfd_l1); \
 	echo pfd_l2=$(pfd_l2); \
