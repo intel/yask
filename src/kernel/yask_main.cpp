@@ -157,19 +157,20 @@ struct MySettings {
         // Any remaining strings will be returned.
         auto rem_args = parser.parse_args(argc, argv);
 
-        // Handle additional knobs and help if there is a soln.
+        // Handle additional knobs and -help if there is a soln.
         if (ksoln) {
+            assert(kenv);
+            auto& os = kenv->get_debug_output()->get_ostream();
 
             // Parse standard args not handled by this parser.
             rem_args = ksoln->apply_command_line_options(rem_args);
 
             if (help) {
-                cout << "Usage: " << pgm_name << " [options]\n"
+                os << "Usage: " << pgm_name << " [options]\n"
                     "Options from the '" << pgm_name << "' binary:\n";
-                parser.print_help(cout);
-                cout << "Options from the YASK library:\n" <<
-                    ksoln->get_command_line_help();
-                cout << 
+                parser.print_help(os);
+                os << "Options from the YASK library:\n" <<
+                    ksoln->get_command_line_help() <<
                     "\nValidation is very slow and uses 2x memory,\n"
                     " so run with very small sizes and number of time-steps.\n"
                     " If validation fails, it may be due to rounding error;\n"
@@ -184,7 +185,7 @@ struct MySettings {
                     exnr += " -nr" + dname + " " + to_string(i + 1);
                     i++;
                 }
-                cout <<
+                os <<
                     "\nExamples:\n"
                     " " << pgm_name << " -g 768  # global-domain size in all dims same.\n"
                     " " << pgm_name << exg << "  # global-domain size in each dim separately.\n"
@@ -192,19 +193,24 @@ struct MySettings {
                     " " << pgm_name << " -g 512" << exnr << "  # number of ranks in each dim.\n" <<
                     " " << pgm_name << " -g 512" << exb << " -no-pre_auto_tune  # manual block size.\n" <<
                     flush;
-                if (kenv)
-                    kenv->exit(1);
-                else
-                    exit(1);
+                kenv->exit(1);
             }
 
-            // Add settings.
-            ostringstream oss;
-            oss << "Options from the '" << pgm_name << "' binary:\n";
-            parser.print_values(oss);
-            oss << "Options from the YASK library:\n" <<
+            // Print splash banner and related info.
+            kenv->print_splash(argc, argv, "YASK Performance and Validation Utility invocation: ");
+            os << "\nStencil name: " << ksoln->get_name() << endl;
+
+            // Print current settings.
+            os << "Current option settings from the '" << pgm_name << "' binary:\n";
+            parser.print_values(os);
+            os << "Current option settings from the YASK library:\n" <<
                 ksoln->get_command_line_values();
             
+            // Check option consistency.
+            kenv->assert_equality_over_ranks(num_trials, "number of trials");
+            kenv->assert_equality_over_ranks(trial_steps, "number of steps per trial");
+            kenv->assert_equality_over_ranks(validate ? 0 : 1, "validation");
+
             if (rem_args.length())
                 THROW_YASK_EXCEPTION("extraneous parameter(s): '" +
                                      rem_args +
@@ -267,8 +273,13 @@ int main(int argc, char** argv)
 
         // Set up the environment.
         kenv = kfac.new_env();
+        if (!kenv)
+            THROW_YASK_EXCEPTION("could not create YASK env");
         auto num_ranks = kenv->get_num_ranks();
 
+        // Make sure any MPI/OMP debug data is dumped from all ranks before continuing.
+        kenv->global_barrier();
+        
         // Enable debug only on requested rank.
         if (opts.msg_rank != kenv->get_rank_index())
            yk_env::disable_debug_output();
@@ -277,20 +288,9 @@ int main(int argc, char** argv)
         // Make solution object containing data and parameters for stencil eval.
         auto ksoln = kfac.new_solution(kenv);
 
-        // Parse custom and library-provided cmd-line options and
-        // exit on -help or error.
+        // Parse custom and library-provided cmd-line options, exit on -help
+        // or error, else show splash and current options.
         opts.parse(argc, argv, kenv, ksoln);
-
-        // Make sure any MPI/OMP debug data is dumped from all ranks before continuing
-        // and check option consistency.
-        kenv->global_barrier();
-        kenv->assert_equality_over_ranks(opts.num_trials, "number of trials");
-        kenv->assert_equality_over_ranks(opts.trial_steps, "number of steps per trial");
-        kenv->assert_equality_over_ranks(opts.validate ? 0 : 1, "validation");
-
-        // Print splash banner and related info.
-        kenv->print_splash(argc, argv, "YASK Performance and Validation Utility invocation: ");
-        os << "\nStencil name: " << ksoln->get_name() << endl;
 
         // Print PID and sleep for debug if needed.
         os << "\nPID: " << getpid() << endl;

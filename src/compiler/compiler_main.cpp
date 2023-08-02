@@ -134,18 +134,17 @@ struct MySettings {
             cout <<
                 "\nExamples:\n"
                 " " << pgm_name << " -stencil 3axis -radius 1 -target pseudo -p -  # '-' for stdout\n"
-                " " << pgm_name << " -stencil awp -elem-bytes 8 -fold x=4,y=2 -target avx2 -p stencil_code.hpp\n"
+                " " << pgm_name << " -stencil awp -elem-bytes 8 -fold x=2,y=2 -target avx2 -p stencil_code.hpp\n"
                 " " << pgm_name << " -stencil iso3dfd -radius 4 -target avx512 -p stencil_code.hpp\n" <<
                 flush;
             exit(1);
         }
 
         // Show settings.
-        ostringstream oss;
-        oss << "Options from the '" << pgm_name << "' binary:\n";
-        parser.print_values(oss);
+        cout << "Current option settings from the '" << pgm_name << "' binary:\n";
+        parser.print_values(cout);
         auto cvals = csoln->get_command_line_values();
-        oss << "Options from the YASK compiler library:\n" <<
+        cout << "Current option settings from the YASK compiler library:\n" <<
             cvals;
        
         if (rem_args2.length())
