@@ -31,10 +31,10 @@ and Intel(R) graphics processors.
 
 ### Pre-requisites:
 * Intel(R) [oneAPI](https://software.intel.com/content/www/us/en/develop/tools/oneapi.html)
-  HPC Toolkit for Linux (toolkit 2023.2 or later recommended) this will install
+  HPC Toolkit for Linux (toolkit 2023.2 or later recommended); this will install
   the Intel(R) oneAPI DPC++/C++ Compiler and the Intel(R) MPI Library.
-  See notes below under version 4.00.00 changes.     
-* Gnu C++ compiler, g++ (8.2.0 or later recommended).
+  See compiler notes below under version 4.00.00 changes.
+* Gnu C++ compiler, g++ (8.5.0 or later recommended).
   Even when using Intel compilers, a g++ installation is required.
 * Linux libraries `librt` and `libnuma`.
 * Grep.
