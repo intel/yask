@@ -31,14 +31,14 @@ and Intel(R) graphics processors.
 
 ### Pre-requisites:
 * Intel(R) [oneAPI](https://software.intel.com/content/www/us/en/develop/tools/oneapi.html)
-  HPC Toolkit for Linux (toolkit 2022.3 or later recommended; this will install
-  the Intel(R) oneAPI DPC++/C++ Compiler 2022.2.0).
+  HPC Toolkit for Linux (toolkit 2023.2 or later recommended) this will install
+  the Intel(R) oneAPI DPC++/C++ Compiler and the Intel(R) MPI Library.
   See notes below under version 4.00.00 changes.     
 * Gnu C++ compiler, g++ (8.2.0 or later recommended).
   Even when using Intel compilers, a g++ installation is required.
 * Linux libraries `librt` and `libnuma`.
 * Grep.
-* Perl (5.010 or later).
+* Perl (v5 or later).
 * Awk.
 * Gnu make.
 * Bash shell.
@@ -65,7 +65,7 @@ and Intel(R) graphics processors.
 
 ## Backward-compatibility notices
 ### Version 4
-* Version 4.04.00 deprecates the existing `void*` set/get_elements_in_slice()
+* Version 4.04.00 deprecates the existing `void* {set,get}_elements_in_slice()`
     APIs and provides safer `float*` and `double*` versions.
 * Version 4.03.00 is a significant release with the following notices:
   - Each non-scratch stencil equation is now checked to ensure
@@ -74,7 +74,7 @@ and Intel(R) graphics processors.
     (-1 is used for less-common reverse-time stencils.)
   - The `yk_solution::get_var()` API now throws an exception if the
     named var does not exist. (Used to return `std::nullptr`.)
-  - Vector clustering (unrolling by the YASK compiler) is no
+  - Vector "clustering" (unrolling by the YASK compiler) is no
     longer supported.
   - Read-ahead in the inner-loop is no longer supported.
   - APIs for getting OpenMP thread counts were added.
