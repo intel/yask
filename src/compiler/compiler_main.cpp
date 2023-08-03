@@ -80,7 +80,8 @@ struct MySettings {
     // Parse options from the command-line and set corresponding vars.
     // Exit with message on error or request for help.
     void parse(int argc, char** argv,
-               yc_solution_ptr csoln) {
+               yc_solution_ptr csoln,
+               bool print_info = true) {
         string pgm_name(argv[0]);
         string values;
 
@@ -141,11 +142,13 @@ struct MySettings {
         }
 
         // Show settings.
-        cout << "Current option settings from the '" << pgm_name << "' binary:\n";
-        parser.print_values(cout);
-        auto cvals = csoln->get_command_line_values();
-        cout << "Current option settings from the YASK compiler library:\n" <<
-            cvals;
+        if (print_info) {
+            cout << "Settings of options from the '" << pgm_name << "' binary:\n";
+            parser.print_values(cout);
+            auto cvals = csoln->get_command_line_values();
+            cout << "Settings of options from the YASK compiler library:\n" <<
+                cvals;
+        }
        
         if (rem_args2.length())
             THROW_YASK_EXCEPTION("extraneous parameter(s): '" +
@@ -170,7 +173,7 @@ int main(int argc, char* argv[]) {
         // before the requested solution is chosen.
         {
             auto null_soln = factory.new_solution("temp");
-            my_settings.parse(argc, argv, null_soln);
+            my_settings.parse(argc, argv, null_soln, false);
         }
        
         // Find the requested stencil in the registry.

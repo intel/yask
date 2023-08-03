@@ -201,9 +201,9 @@ struct MySettings {
             os << "\nStencil name: " << ksoln->get_name() << endl;
 
             // Print current settings.
-            os << "Current option settings from the '" << pgm_name << "' binary:\n";
+            os << "Settings of options from the '" << pgm_name << "' binary:\n";
             parser.print_values(os);
-            os << "Current option settings from the YASK library:\n" <<
+            os << "Settings of options from the YASK library:\n" <<
                 ksoln->get_command_line_values();
             
             // Check option consistency.
