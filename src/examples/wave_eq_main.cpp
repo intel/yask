@@ -139,8 +139,11 @@ int main(int argc, char** argv) {
 
         // Set default sizes.
         if (benchmark_mode) {
-            soln->set_overall_domain_size_vec({ 2048, 2048 });
-            soln->set_block_size_vec({ 72, 72 });
+            soln->set_overall_domain_size_vec({ 8192, 8192 }); // override with '-g <N>'.
+
+            // Configure for temporal blocking.
+            soln->set_block_size("t", 12);          // override with '-bt <N>'.
+            soln->set_block_size_vec({ 256, 92 }); // override with '-b <N>'.
         }
         else
             soln->set_overall_domain_size_vec({ 129, 129 });
