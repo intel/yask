@@ -201,8 +201,7 @@ int main(int argc, char* argv[]) {
         cout << "Stencil-solution description: " << soln->get_description() << endl;
 
         // Parse options again to set options in real soln.
-        my_settings.parse(argc, argv, soln);
-        cout << "Output target: " << soln->get_target() << endl;
+        my_settings.parse(argc, argv, soln, false);
 
         // Create equations and change settings from the overloaded 'define()' methods.
         stencil_soln->define();
@@ -211,11 +210,12 @@ int main(int argc, char* argv[]) {
         // set via the call-back functions from 'define()'
         my_settings.parse(argc, argv, soln);
 
-        // A bit more info.
-        cout << "Num vars defined: " << soln->get_num_vars() << endl;
-        cout << "Num equations defined: " << soln->get_num_equations() << endl;
+        // High-level info.
+        cout << "\nInfo from the definition of '" << soln->get_name() << "':\n" <<
+            "Num vars defined: " << soln->get_num_vars() << endl << 
+            "Num equations defined: " << soln->get_num_equations() << endl;
         
-        // Create the requested output.
+        // Create the requested output, which will print more info.
         if (my_settings.output_filename.length() == 0)
             cout << "Use the '-p' option to generate output from this stencil.\n";
         else {
