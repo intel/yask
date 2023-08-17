@@ -45,7 +45,7 @@ using namespace std;
 using namespace yask;
 
 // gravitational acceleration
-constexpr double g = 9.81;
+constexpr double g = 9.80665; // https://en.wikipedia.org/wiki/Standard_gravity
 
 // water depth
 constexpr double h = 1.0;
