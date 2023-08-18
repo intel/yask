@@ -273,6 +273,9 @@ namespace yask {
         int _numa_pref = NUMA_PREF;
         bool _init_scratch_vars = false; // Init scratch vars to zero.
 
+        // Temporal blocking.
+        bool _round_up_tb_angles = false; // Round up block and micro-block angles to fold lengths.
+        
         // Stencil-dim posn in which to apply block-thread binding.
         // TODO: make this a cmd-line parameter.
         int _bind_posn = 1;

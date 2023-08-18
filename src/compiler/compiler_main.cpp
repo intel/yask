@@ -92,15 +92,6 @@ struct MySettings {
         // Parse standard args.
         auto rem_args2 = csoln->apply_command_line_options(rem_args);
         
-        if (solution_name.length() == 0) {
-            cerr << "Error: stencil solution not specified; use -stencil." << endl;
-            help = true;
-        }
-        if (!csoln->is_target_set()) {
-            cerr << "Error: target not specified; use -target." << endl;
-            help = true;
-        }
-        
         if (help) {
             cout << "Usage: " << pgm_name << " [options]\n"
                 "Options from the '" << pgm_name << "' binary:\n";
@@ -141,6 +132,12 @@ struct MySettings {
             exit(1);
         }
 
+        if (solution_name.length() == 0)
+            THROW_YASK_EXCEPTION("stencil solution not specified; use '-stencil <string>' (or '-help' for list)");
+        if (output_filename.length() && !csoln->is_target_set())
+            THROW_YASK_EXCEPTION("target format not specified for output to '" +
+                                 output_filename + "'; use '-target <string>' (or'-help' for list)");
+        
         // Show settings.
         if (print_info) {
             cout << "Settings of options from the '" << pgm_name << "' binary:\n";
@@ -201,8 +198,7 @@ int main(int argc, char* argv[]) {
         cout << "Stencil-solution description: " << soln->get_description() << endl;
 
         // Parse options again to set options in real soln.
-        my_settings.parse(argc, argv, soln);
-        cout << "Output target: " << soln->get_target() << endl;
+        my_settings.parse(argc, argv, soln, false);
 
         // Create equations and change settings from the overloaded 'define()' methods.
         stencil_soln->define();
@@ -211,13 +207,14 @@ int main(int argc, char* argv[]) {
         // set via the call-back functions from 'define()'
         my_settings.parse(argc, argv, soln);
 
-        // A bit more info.
-        cout << "Num vars defined: " << soln->get_num_vars() << endl;
-        cout << "Num equations defined: " << soln->get_num_equations() << endl;
+        // High-level info.
+        cout << "\nInfo from the definition of '" << soln->get_name() << "':\n" <<
+            "Num vars defined: " << soln->get_num_vars() << endl << 
+            "Num equations defined: " << soln->get_num_equations() << endl;
         
-        // Create the requested output.
+        // Create the requested output, which will print more info.
         if (my_settings.output_filename.length() == 0)
-            cout << "Use the '-p' option to generate output from this stencil.\n";
+            cout << "Use the '-p <string>' option to print generated code to file '<string>'.\n";
         else {
             yask_output_factory ofac;
             yask_output_ptr os;

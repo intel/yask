@@ -881,6 +881,7 @@ namespace yask {
             DOMAIN_VAR_LOOP(i, j) {
                 auto& dim = domain_dims.get_dim(j);
                 auto& dname = dim._get_name();
+                auto fpts = dims->_fold_pts[j];
                 auto rnsize = actl_opts->_mega_block_sizes[i];
                 auto blksize = actl_opts->_block_sizes[i];
                 auto mblksize = actl_opts->_micro_block_sizes[i];
@@ -888,9 +889,12 @@ namespace yask {
                 // Req'd shift in this dim based on max halos.
                 // Can't use separate L & R shift because of possible data reuse in vars.
                 // Can't use separate shifts for each stage for same reason.
-                // TODO: make round-up optional.
-                auto fpts = dims->_fold_pts[j];
-                idx_t angle = ROUND_UP(max_halos[j], fpts);
+                idx_t angle = max_halos[j];
+
+                // Round up to fold lengths if requested.
+                if (actl_opts->_round_up_tb_angles) {
+                    angle = ROUND_UP(max_halos[j], fpts);
+                }
 
                 // Determine the spatial skewing angles for MB.
                 // If MB covers whole blk, no shifting is needed in that dim.

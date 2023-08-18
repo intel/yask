@@ -359,6 +359,10 @@ namespace yask {
         _add_domain_option(parser, "ep", "[Advanced] Extra padding size (beyond halo)"
                            " applied to all YASK vars", _extra_pad_sizes);
         parser.add_option(make_shared<command_line_parser::bool_option>
+                          ("round_up_temporal_angles",
+                           "[Advanced] Round up block and micro-block temproal angles to fold lengths.",
+                           _round_up_tb_angles));
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("allow_addl_padding",
                            "[Advanced] Allow automatic extension of padding"
                            " beyond minimal vector alignment on any or all YASK vars.",
