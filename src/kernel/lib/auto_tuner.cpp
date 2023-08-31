@@ -431,8 +431,6 @@ namespace yask {
                 }
             } // beyond next neighbor of center.
         } // while(true) search for new setting to try.
-
-        THROW_YASK_EXCEPTION("(internal fault) exited from infinite loop");
     } // eval.
 
     // Apply best settings if avail, and adjust other settings.

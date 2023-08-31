@@ -62,8 +62,8 @@ YC_CXX    	:=	$(CXX)
 YC_CXXOPT	?= 	-O2
 YC_CXXDBG	?=	-g
 YC_CXXFLAGS 	:=
-YC_CXXFLAGS_API	:=	-std=c++17
-YC_CXXFLAGS_API	+=	-Wall -Wno-unknown-pragmas -Wno-unused-variable
+YC_CXXWARN	:=	-Wall -Wno-unknown-pragmas -Wno-unused-variable
+YC_CXXFLAGS_API	:=	-std=c++17 $(YC_CXXWARN)
 YC_CXX_INCFLAGS 	:=	$(addprefix -I,$(YC_INC_DIRS))
 YC_CXX_INCFLAGS_API	:=	$(addprefix -I,$(INC_DIR))
 

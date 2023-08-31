@@ -544,6 +544,7 @@ namespace yask {
     static_assert(std::is_trivially_copyable<Indices>::value,
                   "Needed for OpenMP offload");
 
+    #if 0
     // Define OMP reductions on Indices.
     #pragma omp declare reduction(min_idxs : Indices :                  \
                                   omp_out = omp_out.min_elements(omp_in) ) \
@@ -551,6 +552,7 @@ namespace yask {
     #pragma omp declare reduction(max_idxs : Indices :                  \
                                   omp_out = omp_out.max_elements(omp_in) ) \
         initializer (omp_priv = omp_orig)
+    #endif
 
     // Layout base class.
     // This class hierarchy is NOT virtual.

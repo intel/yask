@@ -31,13 +31,8 @@
 YASK_BASE	?=	$(abspath ../..)
 include $(YASK_BASE)/src/common/common.mk
 
-# Initial default settings for the YASK kernel library.
+# Default settings for invoking the YASK compiler.
 # These can be overridden on the 'make' command-line.
-# See src/common/common.mk for more setting vars.
-numa			?=	1
-allow_new_var_types	?=	1
-streaming_stores	?=	0
-use_rcp			?=	0
 use_ptrs		?=	1
 use_safe_ptrs		?=	0
 outer_domain_layout	?=	0
@@ -45,6 +40,14 @@ inner_misc_layout 	?=	1
 first_inner		?=	1
 early_loads		?=	0
 min_buffer_len		?=	1
+
+# Default settings for the YASK kernel library.
+# These can be overridden on the 'make' command-line.
+# See src/common/common.mk for more setting vars.
+numa			?=	1
+allow_new_var_types	?=	1
+streaming_stores	?=	0
+use_rcp			?=	0
 trace			?=	0
 trace_mem		?=	0
 check			?=	0
@@ -56,9 +59,7 @@ check			?=	0
 
 # YASK compiler settings for offload.
 ifeq ($(offload),1)
- pfd_l1		:=	0
- pfd_l2		:=	0
- inner_loop_dim :=	1
+ inner_loop_dim 	:=	1
  outer_domain_layout	:=	1
 endif
 
@@ -87,7 +88,7 @@ ifeq ($(TARGET),knl)
   VEC_MACROS	+=	USE_RCP28
  endif
  MACROS		+=	NUMA_PREF=1
- pfd_l1		?=	1
+ pfd_l1		:=	1
 
 else ifeq ($(TARGET),avx512)
 
@@ -156,17 +157,17 @@ endif
 ifneq ($(step_dim),)
  YC_FLAGS	+=	-step-dim $(step_dim)
 endif
-ifneq ($(pfd_l1),)
- YC_FLAGS	+=	-l1-prefetch-dist $(pfd_l1)
-endif
-ifneq ($(pfd_l2),)
- YC_FLAGS	+=	-l2-prefetch-dist $(pfd_l2)
-endif
 ifneq ($(inner_loop_dim),)
  YC_FLAGS	+=	-inner-loop-dim $(inner_loop_dim)
 endif
 ifneq ($(min_buffer_len),)
  YC_FLAGS	+=	-min-buffer-len $(min_buffer_len)
+endif
+ifneq ($(pfd_l1),)
+ YC_FLAGS	+=	-l1-prefetch-dist $(pfd_l1)
+endif
+ifneq ($(pfd_l2),)
+ YC_FLAGS	+=	-l2-prefetch-dist $(pfd_l2)
 endif
 
 # Stencil compiler flags that are boolean.
@@ -512,7 +513,8 @@ NANO_BLOCK_LOOP_ORDER	?=	DOMAIN_LOOP_DIMS
 ifeq ($(offload),1)
 NANO_BLOCK_LOOP_OMP	?=	omp target teams distribute thread_limit(thread_limit) device(KernelEnv::_omp_devn)
 NANO_BLOCK_LOOP_FLAGS	+=	-omp '$(NANO_BLOCK_LOOP_OMP)'
-NANO_BLOCK_LOOP_CODE	:=	$(NANO_BLOCK_LOOP_MODS) omp loop($(NANO_BLOCK_LOOP_ORDER)) { }
+NANO_BLOCK_LOOP_MODS	+=	omp
+NANO_BLOCK_LOOP_CODE	:=	$(NANO_BLOCK_LOOP_MODS) loop($(NANO_BLOCK_LOOP_ORDER)) { }
 else
 NANO_BLOCK_LOOP_CODE	:=	$(NANO_BLOCK_LOOP_MODS) loop($(NANO_BLOCK_LOOP_ORDER)) { }
 endif
