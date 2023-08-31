@@ -44,7 +44,7 @@ namespace yask {
     // for numbers above 9 (at least up to 99).
 
     // Format: "major.minor.patch[-alpha|-beta]".
-    const string version = "4.04.04";
+    const string version = "4.04.05";
 
     string yask_get_version_string() {
         return version;
@@ -57,10 +57,12 @@ namespace yask {
     
     // Return num with SI multiplier and "iB" suffix,
     // e.g., 412KiB.
+    // Use only for storage bytes, e.g., not for
+    // rates like bytes/sec.
     string make_byte_str(size_t nbytes)
     {
         if (!is_suffix_print_enabled)
-            return to_string(nbytes);
+            return to_string(nbytes) + " Bytes";
         
         ostringstream os;
         double num = double(nbytes);
@@ -89,7 +91,8 @@ namespace yask {
     }
 
     // Return num with SI multiplier, e.g. "3.14M".
-    // Use this one for rates, etc.
+    // Use this one for printing any number that is
+    // not number of storage bytes.
     string make_num_str(idx_t num) {
         if (!is_suffix_print_enabled || (num > -1000 && num < 1000))
             return to_string(num);
