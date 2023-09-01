@@ -181,6 +181,7 @@ while true; do
         echo "  -v"
         echo "     Shortcut for the following options:"
         echo "       $val"
+        echo "     Adds '/tests' to path of log_dir."
         echo "     If you want to override any of these values, place them after '-v'."
         echo "  -show_arch"
         echo "     Print the default architecture string and exit."
@@ -357,6 +358,9 @@ dump="head -v -n -0"
 # Init log file.
 : ${logfile:=yask.$stencil.$arch.$exe_host.n$nnodes.r$nranks.`date +%Y-%m-%d_%H-%M-%S`_p$$.log}
 if [[ -n "$logdir" ]]; then
+    if [[ $doval == 1 ]]; then
+        logdir="$logdir/tests"
+    fi
     logfile="$logdir/$logfile"
 fi
 echo "Writing log to '$logfile'."
