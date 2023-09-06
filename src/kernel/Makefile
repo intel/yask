@@ -352,7 +352,7 @@ endif
 # Compiler-specific settings.
 
 # Create a compiler invocation to test for macro settings.
-YK_CXX_TEST 	:= 	$(YK_CXX)
+YK_CXX_TEST 	:= 	$(YK_CXXCMD)
 cxx_is_llvm_intel :=	$(call MACRO_DEF,$(YK_CXX_TEST),__INTEL_LLVM_COMPILER)
 cxx_is_clang	:=	$(call MACRO_DEF,$(YK_CXX_TEST),__clang__)
 cxx_is_intel	:=	$(call MACRO_DEF,$(YK_CXX_TEST),__INTEL_COMPILER)
