@@ -202,8 +202,8 @@ namespace yask {
         size_t prev_size = 1;
 
         // Loop thru dims.
-        int start_dim = _first_inner ? 0 : size()-1;
-        int end_dim = _first_inner ? size() : -1;
+        int start_dim = _first_inner ? 0 : get_num_dims()-1;
+        int end_dim = _first_inner ? get_num_dims() : -1;
         int step_dim = _first_inner ? 1 : -1;
         for (int di = start_dim; di != end_dim; di += step_dim) {
             auto& i = _q.at(di);
@@ -242,8 +242,8 @@ namespace yask {
         size_t prev_size = 1;
 
         // Loop thru dims.
-        int start_dim = _first_inner ? 0 : size()-1;
-        int stop_dim = _first_inner ? size() : -1;
+        int start_dim = _first_inner ? 0 : get_num_dims()-1;
+        int stop_dim = _first_inner ? get_num_dims() : -1;
         int step_dim = _first_inner ? 1 : -1;
         for (int di = start_dim; di != stop_dim; di += step_dim) {
             auto& i = _q.at(di);

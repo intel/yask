@@ -103,10 +103,14 @@ namespace yask {
         else if (numa_available() != -1) {
             numa_set_bind_policy(0);
             if (numa_pref >= 0 && numa_pref <= numa_max_node())
-                numa_alloc_onnode(nbytes, numa_pref);
+                p = numa_alloc_onnode(nbytes, numa_pref);
             else
-                numa_alloc_local(nbytes);
+                p = numa_alloc_local(nbytes);
             // Interleaved not available.
+
+            if (!p)
+                THROW_YASK_EXCEPTION("cannot allocate " + make_byte_str(nbytes) +
+                                     " using numa-node (or policy) " + to_string(numa_pref));
         }
         else
             THROW_YASK_EXCEPTION("explicit NUMA policy allocation is not available");
@@ -158,15 +162,6 @@ namespace yask {
 
         #endif // not USE_NUMA_POLICY_LIB.
 
-        #else
-        THROW_YASK_EXCEPTION("NUMA allocation is not enabled; build with numa=1");
-        #endif // USE_NUMA.
-
-        // Should not get here w/null p; throw exception.
-        if (!p)
-            THROW_YASK_EXCEPTION("cannot allocate " + make_byte_str(nbytes) +
-                                 " using numa-node (or policy) " + to_string(numa_pref));
-
         // Check alignment.
         if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
             FORMAT_AND_THROW_YASK_EXCEPTION("NUMA-allocated " << p << " is not " <<
@@ -177,6 +172,10 @@ namespace yask {
 
         // Return as a char* as required for shared_ptr ctor.
         return static_cast<char*>(p);
+        
+        #else
+        THROW_YASK_EXCEPTION("NUMA allocation is not enabled; build with numa=1");
+        #endif // USE_NUMA.
     }
 
     // Reverse numa_alloc().
@@ -217,38 +216,36 @@ namespace yask {
 
         void *p = 0;
 
+        #ifdef USE_OFFLOAD
+        THROW_YASK_EXCEPTION("mapping offload device memory to shm not yet supported; "
+                             "use '-no-use_shm' option");
+
         // Allocate using MPI shm.
-        #ifdef USE_MPI
+        #elif defined(USE_MPI)
         assert(shm_comm);
         assert(shm_win);
         MPI_Info win_info;
         MPI_Info_create(&win_info);
         MPI_Info_set(win_info, "alloc_shared_noncontig", "true");
         MPI_Win_allocate_shared(nbytes, 1, win_info, *shm_comm, &p, shm_win);
-        MPI_Info_free(&win_info);
-        MPI_Win_lock_all(0, *shm_win);
-        #else
-        THROW_YASK_EXCEPTION("MPI shm allocation is not enabled; build with mpi=1");
-        #endif
-
         if (!p)
             THROW_YASK_EXCEPTION("cannot allocate " + make_byte_str(nbytes) +
                                  " using MPI shm");
+        MPI_Info_free(&win_info);
+        MPI_Win_lock_all(0, *shm_win);
 
         // Check alignment.
         if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
             FORMAT_AND_THROW_YASK_EXCEPTION("MPI shm-allocated " << p << " is not " <<
                                             CACHELINE_BYTES << "-byte aligned");
 
-        #ifdef USE_OFFLOAD
-        THROW_YASK_EXCEPTION("mapping offload device memory to shm not yet supported; "
-                             "use '-no-use_shm'");
-        #endif
-
         // Cannot typically use huge pages for shm, so not calling set_huge().
         
         // Return as a char* as required for shared_ptr ctor.
         return static_cast<char*>(p);
+        #else
+        THROW_YASK_EXCEPTION("MPI shm allocation is not enabled; build with mpi=1");
+        #endif
     }
 
     // Reverse shm_alloc().

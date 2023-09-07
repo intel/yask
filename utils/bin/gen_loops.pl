@@ -961,8 +961,14 @@ sub processCode($) {
         # use OpenMP on next loop.
         elsif (lc $tok eq 'omp') {
 
-            $features |= $bOmpPar;
-            print "info: using OpenMP on following loop(s).\n";
+	    if ($OPT{omp} !~ /\w/) {
+		warn "info: ignoring OpenMP loop modifier because '-omp' argument is empty.\n";
+	    } 
+
+	    else {
+		$features |= $bOmpPar;
+		print "info: using OpenMP on following loop(s).\n";
+	    }
         }
 
         # generate manual-scheduling optimizations in next loop.
@@ -1238,7 +1244,7 @@ sub main() {
             "  tiled:           generate tiled scan within a >1D loop.\n",
             "  serpentine:      generate reverse scan when enclosing loop index is odd.*\n",
             "  square_wave:     generate 2D square-wave scan for two innermost dims of >1D loop.*\n",
-            "      * Do not use these modifiers for YASK rank or block loops because they must\n",
+            "      * Do not use these modifiers for YASK block or Mega-block loops because they must\n",
             "        execute with strictly-increasing indices when using temporal tiling.\n",
             "        Also, do not combile these modifiers with 'tiled' or 'manual'.\n",
             "A 'ScanIndices' type must be defined in C++ code prior to including the generated code.\n",
