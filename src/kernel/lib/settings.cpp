@@ -851,6 +851,7 @@ namespace yask {
         // than one inner thread.  Otherwise, find_num_subsets() would set
         // default to entire block, and we wouldn't effectively use multiple
         // threads.
+        bool nb_adj = false;
         if (num_inner_threads > 1 && _nano_block_sizes.sum() == 0) {
 
             // Default dim is outer one.
@@ -876,6 +877,7 @@ namespace yask {
                     // Stop when first dim picked.
                     break;
                 }
+                bool nb_adj = true;
             }
 
             // Divide on best dim.
@@ -887,7 +889,7 @@ namespace yask {
             if (nddims >= 2)
                 _nano_block_sizes[_bind_posn] = vbpts;
 
-            // Divide block equally.
+            // If only 1D, just divide block equally.
             else
                 _nano_block_sizes[_bind_posn] = ROUND_UP(bsz / num_inner_threads, vbpts);
         }
@@ -900,6 +902,9 @@ namespace yask {
                                     _micro_block_sizes, "micro-block",
                                     vpts, "vector",
                                     step_dim);
+        if (nb_adj)
+            os << " (Default nano block sizes were selected to leverage " <<
+                num_inner_threads << " inner OpenMP threads.)\n";
         os << " num-nano-blocks-per-micro-block-per-step: " << nsb << endl;
         os << " num-nano-blocks-per-block-per-step: " << (nsb * nmb) << endl;
         os << " num-nano-blocks-per-mega-block-per-step: " << (nsb * nmb * nb) << endl;
