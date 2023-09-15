@@ -169,7 +169,8 @@ ifeq ($(shell which $(YK_CXX)),)
 endif
 YK_CXXCMD	:=	$(YK_CXX)
 
-# Disable ccache when using offloading.
+# Disable ccache when using offloading in case CXX_PREFIX=ccache
+# was set in the env. Can override by setting in gmake command line.
 ifeq ($(offload),1)
  CXX_PREFIX	:=
 endif

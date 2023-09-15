@@ -84,9 +84,8 @@ ifeq ($(TARGET),knl)
  # will fall-back to NUMA node 0 in "cache" memory mode. It will *NOT* do
  # the right thing by default in SNC-2 or SNC-4 clustering modes (using
  # either flat or cache memory modes, but these configurations are uncommon.
- ICC_ISA	?=	-xMIC-AVX512
- GXX_ISA	?=	-march=knl
- VEC_MACROS	?=	USE_INTRIN512
+ GXX_ISA	:=	-march=knl
+ VEC_MACROS	:=	USE_INTRIN512
  ifeq ($(use_rcp),1)
   VEC_MACROS	+=	USE_RCP28
  endif
@@ -95,38 +94,33 @@ ifeq ($(TARGET),knl)
 
 else ifeq ($(TARGET),avx512)
 
- ICC_ISA	?=	-xCORE-AVX512
- GXX_ISA	?=	-mavx512f -mavx512vl -mavx512cd -mavx512bw
- VEC_MACROS	?=	USE_INTRIN512
+ GXX_ISA	:=	-mavx512f -mavx512vl -mavx512cd -mavx512bw
+ VEC_MACROS	:=	USE_INTRIN512
  ifeq ($(use_rcp),1)
   VEC_MACROS	+=	USE_RCP14
  endif
 
 else ifeq ($(TARGET),avx512-ymm)
 
- ICC_ISA	?=	-xCORE-AVX512
- GXX_ISA	?=	-mavx512f -mavx512vl -mavx512cd -mavx512bw
- VEC_MACROS	?=	USE_INTRIN512LO
+ GXX_ISA	:=	-mavx512f -mavx512vl -mavx512cd -mavx512bw
+ VEC_MACROS	:=	USE_INTRIN512LO
  ifeq ($(use_rcp),1)
   VEC_MACROS	+=	USE_RCP14
  endif
 
 else ifeq ($(TARGET),avx2)
 
- ICC_ISA	?=	-xCORE-AVX2
- GXX_ISA	?=	-mavx2
- VEC_MACROS	?=	USE_INTRIN256 USE_AVX2
+ GXX_ISA	:=	-mavx2
+ VEC_MACROS	:=	USE_INTRIN256 USE_AVX2
 
 else ifeq ($(TARGET),avx)
 
- ICC_ISA	?=	-xAVX
- GXX_ISA	?=	-mavx
- VEC_MACROS	?=	USE_INTRIN256
+ GXX_ISA	:=	-mavx
+ VEC_MACROS	:=	USE_INTRIN256
 
 else ifeq ($(TARGET),intel64)
 
- ICC_ISA	?=	-xHOST
- GXX_ISA	?=
+ GXX_ISA	:=
 
 else
 
@@ -354,9 +348,9 @@ endif
 
 # Compiler-specific settings.
 
-# LLVM-based Intel compiler (icpx).
+# LLVM-based Intel compiler (icpx or mpiicpx).
 ifeq ($(cxx_is_llvm_intel),1)
- YK_CXXFLAGS2	+=	$(GXX_ISA) $(ICC_ISA)
+ YK_CXXFLAGS2	+=	$(GXX_ISA)
  ifeq ($(offload),1)
   YK_CXXDBG2	:=	-gline-tables-only
  endif
@@ -370,10 +364,10 @@ ifeq ($(cxx_is_llvm_intel),1)
  MACROS		+=	INTEL_OMP
  VEC_MACROS	+=	NO_PRAGMA_VEC2
 
-# Classic Intel compiler (icpc, not LLVM-based).
+# Classic Intel compiler (icpc or mpiicpc, not LLVM-based).
 else ifeq ($(cxx_is_intel),1)
 
- YK_CXXFLAGS2	+=	$(ICC_ISA)
+ YK_CXXFLAGS2	+=	$(GXX_ISA)
  YK_CXXDBG2	+=	-debug extended
  YK_CXXFLAGS2	+=	-restrict -ansi-alias -fno-alias \
 			-fimf-use-svml=true -fimf-precision=low -fast-transcendentals \
