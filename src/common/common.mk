@@ -83,8 +83,8 @@ RUN_PYTHON	:= 	$(RUN_PREFIX) \
 	env PYTHONPATH=$(LIB_DIR):$(LIB_OUT_DIR):$(PY_OUT_DIR):$(YASK_DIR):$(PYTHONPATH) $(PYTHON)
 
 # Find include path needed for python interface.
-# NB: constructing string inside print() to work for python 2 or 3.
-PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc() + " " + distutils.sysconfig.get_python_inc(plat_specific=1))'))
+PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c \
+			'from sysconfig import get_paths as gp; print(gp()["include"],gp()["platinclude"])'))
 
 # Function to check for pre-defined compiler macro.
 # Invokes compiler using 1st arg.
@@ -113,9 +113,23 @@ SWIG_GCCFLAGS	:= -DYASK_DEPRECATED=''
 # Define deprecated macro used by SWIG.
 DBL_EPSILON_CXXFLAG	:=	-DDBL_EPSILON=2.2204460492503131e-16
 
+#### Some key settings for building kernel libs and apps.
+
 # Determine default architecture by running kernel script w/special knob.
 # (Do not assume 'yask.sh' has been installed in $(BIN_OUT_DIR) yet.)
 arch			?=	$(shell $(BASH) $(SRC_DIR)/kernel/yask.sh -show_arch)
+
+# Set 'stencil' to the name of the YASK solution to build.
+stencil			?=	iso3dfd
+
+# Set 'real_bytes' to number of bytes in a float (4 or 8).
+real_bytes		?=	4
+
+# Set 'mpi=0' to build without MPI support.
+mpi			?=	1
+
+# Set 'omp=0' to build without OpenMP support.
+omp			?=	1
 
 # Set 'TARGET' from 'arch', converting codenames and other aliases to ISA names.
 # 'TARGET' is the canonical target name.
@@ -136,6 +150,38 @@ else
   $(error Target not recognized; use arch=avx512, avx512-ymm, avx2, avx, knl, or intel64)
 endif
 
+# Default compiler.
+CXX		:=	icpx
+ifeq ($(shell which $(CXX)),)
+ CXX		:=	g++
+endif
+
+# Compiler for kernel libs and apps.
+YK_CXX		:=	$(CXX)
+ifeq ($(mpi),1)
+ YK_CXX 	:=	mpiicpx
+ ifeq ($(shell which $(YK_CXX)),)
+  YK_CXX 	:=	mpic++
+ endif
+endif
+ifeq ($(shell which $(YK_CXX)),)
+ $(error "$(YK_CXX) not found in PATH, set YK_CXX to desired compiler")
+endif
+YK_CXXCMD	:=	$(YK_CXX)
+
+# Disable ccache when using offloading in case CXX_PREFIX=ccache
+# was set in the env. Can override by setting in gmake command line.
+ifeq ($(offload),1)
+ CXX_PREFIX	:=
+endif
+
+# Test compiler for pre-defined macros.
+cxx_is_llvm_intel :=	$(call MACRO_DEF,$(YK_CXXCMD),__INTEL_LLVM_COMPILER)
+cxx_is_clang	:=	$(call MACRO_DEF,$(YK_CXXCMD),__clang__)
+cxx_is_intel	:=	$(call MACRO_DEF,$(YK_CXXCMD),__INTEL_COMPILER)
+cxx_is_gnu	:= 	$(call MACRO_DEF,$(YK_CXXCMD),__GNUC__)
+cxx_is_nv	:= 	$(call MACRO_DEF,$(YK_CXXCMD),__NVCOMPILER)
+
 # Set 'offload=1' to build device-offload (e.g., GPU) library.
 # Set 'offload_usm=1' to build with unified shared mem model.
 # Set 'offload_arch' to the target offload architecture.
@@ -145,29 +191,25 @@ ifeq ($(offload_usm),1)
  offload		:=	1
 endif
 ifeq ($(offload),1)
- offload_arch		?=	spir64
+ ifeq ($(cxx_is_llvm_intel),1)
+  offload_arch		?=	spir64
+ else ifeq ($(cxx_is_nv),1)
+  offload_arch		?=	nv
+ endif
 endif
-
-# Set 'stencil' to the name of the YASK solution to build.
-stencil			?=	iso3dfd
-
-# Set 'real_bytes' to number of bytes in a float (4 or 8).
-real_bytes		?=	4
-
-# Set 'mpi=0' to build without MPI support.
-mpi			?=	1
-
-# Set 'omp=0' to build without OpenMP support.
-omp			?=	1
 
 # Main vars for naming the libraries and executables.
 # Set the following vars on 'make' cmd-line for corresponding effects:
 # - YK_STENCIL and/or YK_ARCH to name libraries and executables differently.
 YK_STENCIL	?=	$(stencil)$(YK_STENCIL_SUFFIX)
+YK_ARCH  	:=	$(arch)
 ifeq ($(offload),1)
+ ifeq ($(offload_arch),)
+  YK_ARCH	:=	$(arch).offload
+ else
   YK_ARCH	:=	$(arch).offload-$(offload_arch)
+ endif
 else
-  YK_ARCH	:=	$(arch)
 endif
 YK_TAG  	:=	$(YK_STENCIL).$(YK_ARCH)
 
@@ -175,19 +217,6 @@ YK_TAG  	:=	$(YK_STENCIL).$(YK_ARCH)
 YK_BASE		:=	yask_kernel
 YK_EXT_BASE	:=	$(YK_BASE).$(YK_TAG)
 YK_LIB		:=	$(LIB_OUT_DIR)/lib$(YK_EXT_BASE)$(SO_SUFFIX)
-
-# Compiler for building kernel lib and apps.
-CXX		:=	icpx
-YK_CXX		:=	$(CXX)
-MPI_CXX 	:=	mpiicpc
-ifeq ($(mpi),1)
- YK_CXXCMD	:=	$(MPI_CXX) -cxx=$(YK_CXX)
-else
- YK_CXXCMD	:=	$(YK_CXX)
-endif
-ifeq ($(offload),1)
- CXX_PREFIX	:=
-endif
 
 # Base compiler flags for building kernel lib and apps.
 ifeq ($(offload),0)

@@ -339,6 +339,14 @@ namespace yask {
             std::vector<int> dim_ofs_vec(dim_offsets);
             return new_relative_var_point(dim_ofs_vec);
         }
+        virtual yc_var_point_node_ptr
+        new_relative_grid_point(const std::vector<int>& dim_offsets) {
+            return new_relative_var_point(dim_offsets);
+        }
+        virtual yc_var_point_node_ptr
+        new_relative_grid_point(const std::initializer_list<int>& dim_offsets) {
+            return new_relative_var_point(dim_offsets);
+        }
     };
 
     // A list of vars.  This holds pointers to vars defined by the stencil

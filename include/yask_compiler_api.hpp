@@ -872,19 +872,15 @@ namespace yask {
         }
         #endif
         
-        /// **[Deprecated]** Use new_relative_var_point().
+        /// **[Deprecated]** Use new_var_point().
         YASK_DEPRECATED
-        inline yc_var_point_node_ptr
-        new_relative_grid_point(const std::vector<int>& dim_offsets) {
-            return new_relative_var_point(dim_offsets);
-        }
+        virtual yc_var_point_node_ptr
+        new_relative_grid_point(const std::vector<int>& dim_offsets) =0;
         #ifndef SWIG
-        /// **[Deprecated]** Use new_relative_var_point().
+        /// **[Deprecated]** Use new_var_point().
         YASK_DEPRECATED
-        inline yc_var_point_node_ptr
-        new_relative_grid_point(const std::initializer_list<int>& dim_offsets) {
-            return new_relative_var_point(dim_offsets);
-        }
+        virtual yc_var_point_node_ptr
+        new_relative_grid_point(const std::initializer_list<int>& dim_offsets) =0;
         #endif
         
     };                      // yc_var.

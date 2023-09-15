@@ -57,12 +57,6 @@ check			?=	0
 # binary size and performance, even if not used. Including the "trace_mem"
 # code has a large impact, even if not used.
 
-# YASK compiler settings for offload.
-ifeq ($(offload),1)
- inner_loop_dim 	:=	1
- outer_domain_layout	:=	1
-endif
-
 # Main vars for running the YASK compiler.
 # Set the following vars on 'make' cmd-line for corresponding effects:
 # - YC_STENCIL to override stencil name passed to YASK compiler.
@@ -74,6 +68,15 @@ else
   YC_TARGET	?=	$(TARGET)
 endif
 
+# YASK compiler settings for offload.
+ifeq ($(offload),1)
+ inner_loop_dim 	:=	1
+ outer_domain_layout	:=	1
+ ifeq ($(cxx_is_nv),1)
+  min_buffer_len	:=	99
+ endif
+endif
+
 # Default settings based on target.
 ifeq ($(TARGET),knl)
 
@@ -81,9 +84,8 @@ ifeq ($(TARGET),knl)
  # will fall-back to NUMA node 0 in "cache" memory mode. It will *NOT* do
  # the right thing by default in SNC-2 or SNC-4 clustering modes (using
  # either flat or cache memory modes, but these configurations are uncommon.
- ICC_ISA	?=	-xMIC-AVX512
- GXX_ISA	?=	-march=knl
- VEC_MACROS	?=	USE_INTRIN512
+ GXX_ISA	:=	-march=knl
+ VEC_MACROS	:=	USE_INTRIN512
  ifeq ($(use_rcp),1)
   VEC_MACROS	+=	USE_RCP28
  endif
@@ -92,38 +94,33 @@ ifeq ($(TARGET),knl)
 
 else ifeq ($(TARGET),avx512)
 
- ICC_ISA	?=	-xCORE-AVX512
- GXX_ISA	?=	-mavx512f -mavx512vl -mavx512cd -mavx512bw
- VEC_MACROS	?=	USE_INTRIN512
+ GXX_ISA	:=	-mavx512f -mavx512vl -mavx512cd -mavx512bw
+ VEC_MACROS	:=	USE_INTRIN512
  ifeq ($(use_rcp),1)
   VEC_MACROS	+=	USE_RCP14
  endif
 
 else ifeq ($(TARGET),avx512-ymm)
 
- ICC_ISA	?=	-xCORE-AVX512
- GXX_ISA	?=	-mavx512f -mavx512vl -mavx512cd -mavx512bw
- VEC_MACROS	?=	USE_INTRIN512LO
+ GXX_ISA	:=	-mavx512f -mavx512vl -mavx512cd -mavx512bw
+ VEC_MACROS	:=	USE_INTRIN512LO
  ifeq ($(use_rcp),1)
   VEC_MACROS	+=	USE_RCP14
  endif
 
 else ifeq ($(TARGET),avx2)
 
- ICC_ISA	?=	-xCORE-AVX2
- GXX_ISA	?=	-mavx2
- VEC_MACROS	?=	USE_INTRIN256 USE_AVX2
+ GXX_ISA	:=	-mavx2
+ VEC_MACROS	:=	USE_INTRIN256 USE_AVX2
 
 else ifeq ($(TARGET),avx)
 
- ICC_ISA	?=	-xAVX
- GXX_ISA	?=	-mavx
- VEC_MACROS	?=	USE_INTRIN256
+ GXX_ISA	:=	-mavx
+ VEC_MACROS	:=	USE_INTRIN256
 
 else ifeq ($(TARGET),intel64)
 
- ICC_ISA	?=	-xHOST
- GXX_ISA	?=
+ GXX_ISA	:=
 
 else
 
@@ -351,16 +348,9 @@ endif
 
 # Compiler-specific settings.
 
-# Create a compiler invocation to test for macro settings.
-YK_CXX_TEST 	:= 	$(YK_CXXCMD)
-cxx_is_llvm_intel :=	$(call MACRO_DEF,$(YK_CXX_TEST),__INTEL_LLVM_COMPILER)
-cxx_is_clang	:=	$(call MACRO_DEF,$(YK_CXX_TEST),__clang__)
-cxx_is_intel	:=	$(call MACRO_DEF,$(YK_CXX_TEST),__INTEL_COMPILER)
-cxx_is_gnu	:= 	$(call MACRO_DEF,$(YK_CXX_TEST),__GNUC__)
-
-# LLVM-based Intel compiler (icpx).
+# LLVM-based Intel compiler (icpx or mpiicpx).
 ifeq ($(cxx_is_llvm_intel),1)
- YK_CXXFLAGS2	+=	$(GXX_ISA) $(ICC_ISA)
+ YK_CXXFLAGS2	+=	$(GXX_ISA)
  ifeq ($(offload),1)
   YK_CXXDBG2	:=	-gline-tables-only
  endif
@@ -374,17 +364,10 @@ ifeq ($(cxx_is_llvm_intel),1)
  MACROS		+=	INTEL_OMP
  VEC_MACROS	+=	NO_PRAGMA_VEC2
 
-# Clang compiler (clang++, not Intel version).
-else ifeq ($(cxx_is_clang),1)
- YK_CXXFLAGS2	+=	$(GXX_ISA)
- YK_CXXWARN2	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable \
-			-Wno-unused-const-variable -fno-color-diagnostics
- VEC_MACROS	+=	NO_SVML NO_PRAGMA_VEC2
-
-# Classic Intel compiler (icpc, not LLVM-based).
+# Classic Intel compiler (icpc or mpiicpc, not LLVM-based).
 else ifeq ($(cxx_is_intel),1)
 
- YK_CXXFLAGS2	+=	$(ICC_ISA)
+ YK_CXXFLAGS2	+=	$(GXX_ISA)
  YK_CXXDBG2	+=	-debug extended
  YK_CXXFLAGS2	+=	-restrict -ansi-alias -fno-alias \
 			-fimf-use-svml=true -fimf-precision=low -fast-transcendentals \
@@ -399,7 +382,26 @@ else ifeq ($(cxx_is_intel),1)
  YK_CXX_VER_CMD :=	$(YK_CXX) -V
  OMPFLAG	:=	-qopenmp
 
-# Gnu-compatible compiler (g++, not Intel or LLVM).
+# Clang compiler (clang++, not Intel version).
+else ifeq ($(cxx_is_clang),1)
+ YK_CXXFLAGS2	+=	$(GXX_ISA)
+ YK_CXXWARN2	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable \
+			-Wno-unused-const-variable -fno-color-diagnostics
+ VEC_MACROS	+=	NO_SVML NO_PRAGMA_VEC2
+
+# Nvidia HPC compiler (nvc++ or mpic++)
+else ifeq ($(cxx_is_nv),1)
+ YK_CXXFLAGS2	+=	$(GXX_ISA)
+ YK_CXXWARN2	+=	-Wno-unused-variable
+ SWIG_CXXFLAGS	+=	$(SWIG_GCCFLAGS)
+ VEC_MACROS	+=	NO_SVML
+ ifeq ($(offload),1)
+  OMPFLAG	:=	-mp=gpu
+ else
+  OMPFLAG	:=	-mp=multicore
+ endif
+
+# Gnu-compatible compiler (g++, but not any of above)
 else ifeq ($(cxx_is_gnu),1)
  YK_CXXFLAGS2	+=	$(GXX_ISA)
  YK_CXXWARN2	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
@@ -425,7 +427,9 @@ ifeq ($(offload),1)
  ifeq ($(offload_arch),x86_64)
   MACROS	+=	USE_OFFLOAD_X86
  endif
- OMPFLAGS	+=	-fopenmp-targets=$(offload_arch)
+ ifeq ($(cxx_is_llvm_intel),1)
+  OMPFLAGS	+=	-fopenmp-targets=$(offload_arch)
+ endif
 else
  MACROS		+=	$(VEC_MACROS)
 endif
@@ -469,76 +473,86 @@ NVDIMS		:=	`awk '/define.*NUM_STENCIL_AND_VAR_DIMS/ {print $$NF}' $(YK_CODE_FILE
 # wavefronts. The time loop may be found in
 # StencilEquations::run_solution(). The mega_blocks are executed sequentially,
 # so no OpenMP here.
-RANK_LOOP_MODS		?=	nested
-RANK_LOOP_FLAGS		?=	-prefix rank_
-RANK_LOOP_ORDER		?=	DOMAIN_LOOP_DIMS
-RANK_LOOP_CODE		?=	$(RANK_LOOP_MODS) loop($(RANK_LOOP_ORDER)) { }
+RANK_LOOP_MODS		:=	nested
+RANK_LOOP_FLAGS		:=	-prefix rank_
+RANK_LOOP_ORDER		:=	DOMAIN_LOOP_DIMS
+RANK_LOOP_CODE		:=	$(RANK_LOOP_MODS) loop($(RANK_LOOP_ORDER)) { }
 
 # Mega_Block loops break up a mega-block using OpenMP threading into blocks.  The
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
 # to a top-level OpenMP thread.
-MEGA_BLOCK_LOOP_MODS	?=
-MEGA_BLOCK_LOOP_OMP	?=	omp parallel for schedule(dynamic,1) proc_bind(spread)
-MEGA_BLOCK_LOOP_FLAGS	?=	-prefix mega_block_ -omp '$(MEGA_BLOCK_LOOP_OMP)'
-MEGA_BLOCK_LOOP_ORDER	?=	DOMAIN_LOOP_DIMS
-MEGA_BLOCK_LOOP_CODE	?=	$(MEGA_BLOCK_LOOP_MODS) omp loop($(MEGA_BLOCK_LOOP_ORDER)) { } 
+MEGA_BLOCK_LOOP_MODS	:=
+MEGA_BLOCK_LOOP_OMP	:=	omp parallel for schedule(dynamic,1) proc_bind(spread)
+MEGA_BLOCK_LOOP_FLAGS	:=	-prefix mega_block_ -omp '$(MEGA_BLOCK_LOOP_OMP)'
+MEGA_BLOCK_LOOP_ORDER	:=	DOMAIN_LOOP_DIMS
+MEGA_BLOCK_LOOP_CODE	:=	$(MEGA_BLOCK_LOOP_MODS) omp loop($(MEGA_BLOCK_LOOP_ORDER)) { } 
 
 # Block loops break up a block into micro-blocks.
 # These are executed sequentially, so no OpenMP.
 # Like with rank loops, in order for temporal wavefronts to operate properly,
 # the scanning paths must have strictly incrementing indices.
-BLOCK_LOOP_MODS		?=	nested
-BLOCK_LOOP_FLAGS	?=	-prefix block_
-BLOCK_LOOP_ORDER	?=	DOMAIN_LOOP_DIMS
-BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_MODS) loop($(BLOCK_LOOP_ORDER)) { }
+BLOCK_LOOP_MODS		:=	nested
+BLOCK_LOOP_FLAGS	:=	-prefix block_
+BLOCK_LOOP_ORDER	:=	DOMAIN_LOOP_DIMS
+BLOCK_LOOP_CODE		:=	$(BLOCK_LOOP_MODS) loop($(BLOCK_LOOP_ORDER)) { }
 
 # Mini-Block loops break up a micro-block into nano-blocks. The 'omp' modifier
 # creates a nested OpenMP loop so that each nano-block is assigned to a
 # nested OpenMP thread. The OpenMP construct is not used when running with
 # '-bind_inner_threads' because another parallel section is created.
-MICRO_BLOCK_LOOP_MODS	?=
-MICRO_BLOCK_LOOP_OMP	?=	omp parallel for schedule(static,1) proc_bind(spread)
-MICRO_BLOCK_LOOP_FLAGS	?=	-prefix micro_block_ -omp '$(MICRO_BLOCK_LOOP_OMP)'
-MICRO_BLOCK_LOOP_ORDER	?=	DOMAIN_LOOP_DIMS
-MICRO_BLOCK_LOOP_CODE	?=	$(MICRO_BLOCK_LOOP_MODS) omp loop($(MICRO_BLOCK_LOOP_ORDER)) { }
+MICRO_BLOCK_LOOP_MODS	:=
+MICRO_BLOCK_LOOP_OMP	:=	omp parallel for schedule(static,1) proc_bind(spread)
+MICRO_BLOCK_LOOP_FLAGS	:=	-prefix micro_block_ -omp '$(MICRO_BLOCK_LOOP_OMP)'
+MICRO_BLOCK_LOOP_ORDER	:=	DOMAIN_LOOP_DIMS
+MICRO_BLOCK_LOOP_CODE	:=	$(MICRO_BLOCK_LOOP_MODS) omp loop($(MICRO_BLOCK_LOOP_ORDER)) { }
 
-# Nano-block loops break up a nano-block into pico-blocks.  These
-# loops are run by a single OMP thread. When offloading, this loop is run in
-# parallel on the offload device.  The indexes in this loop
-# are 'normalized', i.e., vector units and rank-relative.
-# When offloading, a nano-block is executed on the device.
-NANO_BLOCK_LOOP_MODS	?=	serpentine
-NANO_BLOCK_LOOP_FLAGS	?=	-no-align -prefix nano_block_
-NANO_BLOCK_LOOP_ORDER	?=	DOMAIN_LOOP_DIMS
+# Nano-block loops break up a nano-block into pico-blocks.  This loop is run
+# by a single OMP thread on the CPU. When offloading, this loop is executed
+# on the device using OMP offload (for Intel devices, "parallel for" is
+# deferred to the pico loops).  The indexes in this loop are 'normalized',
+# i.e., vector units and rank-relative.  When offloading, a nano-block is
+# executed on the device.
+NANO_BLOCK_LOOP_MODS	:=	serpentine
+NANO_BLOCK_LOOP_FLAGS	:=	-no-align -prefix nano_block_
+NANO_BLOCK_LOOP_ORDER	:=	DOMAIN_LOOP_DIMS
 ifeq ($(offload),1)
-NANO_BLOCK_LOOP_OMP	?=	omp target teams distribute thread_limit(thread_limit) device(KernelEnv::_omp_devn)
-NANO_BLOCK_LOOP_FLAGS	+=	-omp '$(NANO_BLOCK_LOOP_OMP)'
-NANO_BLOCK_LOOP_MODS	+=	omp
-NANO_BLOCK_LOOP_CODE	:=	$(NANO_BLOCK_LOOP_MODS) loop($(NANO_BLOCK_LOOP_ORDER)) { }
-else
-NANO_BLOCK_LOOP_CODE	:=	$(NANO_BLOCK_LOOP_MODS) loop($(NANO_BLOCK_LOOP_ORDER)) { }
+ ifeq ($(cxx_is_llvm_intel),1)
+  NANO_BLOCK_LOOP_MODS	:=	omp serpentine
+  NANO_BLOCK_LOOP_OMP	:=	omp target teams distribute thread_limit(thread_limit) device(KernelEnv::_omp_devn)
+ else
+  NANO_BLOCK_LOOP_MODS	:=	omp nested
+  NANO_BLOCK_LOOP_OMP	:=	omp target teams distribute parallel for thread_limit(thread_limit) device(KernelEnv::_omp_devn)
+ endif
+ NANO_BLOCK_LOOP_FLAGS	+=	-omp '$(NANO_BLOCK_LOOP_OMP)'
 endif
+NANO_BLOCK_LOOP_CODE	:=	$(NANO_BLOCK_LOOP_MODS) loop($(NANO_BLOCK_LOOP_ORDER)) { }
 
-# Pico-Block loops break up a pico-block into vectors.
-# When offloading, each pico-block is executed by a team of threads on the device.
-# Pico-blocks must contain a separate inner loop over PICO_BLOCK_INNER_LOOP_DIM.
-PICO_BLOCK_LOOP_FLAGS	?=	-no-align -prefix pico_block_
-PICO_BLOCK_LOOP_ORDER	?=	PICO_BLOCK_OUTER_LOOP_DIMS
+# Pico-Block loops break up a pico-block into vectors.  When offloading,
+# each pico-block is executed by a team on Intel devices or using full
+# target parallel execution otherwise.  Pico-blocks must contain a separate
+# inner loop over PICO_BLOCK_INNER_LOOP_DIM.
+PICO_BLOCK_LOOP_FLAGS	:=	-no-align -prefix pico_block_
+PICO_BLOCK_LOOP_ORDER	:=	PICO_BLOCK_OUTER_LOOP_DIMS
+PICO_BLOCK_LOOP_MODS	:=	nested
 ifeq ($(offload),1)
-PICO_BLOCK_LOOP_MODS	?=	omp nested
-PICO_BLOCK_LOOP_OMP	?=	omp parallel for
-PICO_BLOCK_LOOP_FLAGS	+=	-omp '$(PICO_BLOCK_LOOP_OMP)'
-else
-PICO_BLOCK_LOOP_MODS	?=	nested
+ ifeq ($(cxx_is_llvm_intel),1)
+  PICO_BLOCK_LOOP_MODS	:=	omp nested
+  PICO_BLOCK_LOOP_OMP	:=	omp parallel for
+  PICO_BLOCK_LOOP_FLAGS	+=	-omp '$(PICO_BLOCK_LOOP_OMP)'
+ endif
 endif
-PICO_BLOCK_LOOP_CODE	?=	$(PICO_BLOCK_LOOP_MODS) loop($(PICO_BLOCK_LOOP_ORDER)) { \
+PICO_BLOCK_LOOP_CODE	:=	$(PICO_BLOCK_LOOP_MODS) loop($(PICO_BLOCK_LOOP_ORDER)) { \
 				  loop(PICO_BLOCK_INNER_LOOP_DIM) { } }
 
 # General-purpose parallel loop.
-MISC_LOOP_OMP		?=	omp parallel for schedule(guided) proc_bind(spread)
-MISC_LOOP_FLAGS		?=	-prefix misc_ -omp '$(MISC_LOOP_OMP)'
-MISC_LOOP_ORDER		?=	DOMAIN_LOOP_DIMS
-MISC_LOOP_CODE		?=	$(MISC_LOOP_MODS) omp loop($(MISC_LOOP_ORDER)) { }
+ifeq ($(cxx_is_llvm_intel),1)
+ MISC_LOOP_OMP		:=	omp parallel for schedule(guided) proc_bind(spread)
+else
+ MISC_LOOP_OMP		:=	omp parallel for
+endif
+MISC_LOOP_FLAGS		:=	-prefix misc_ -omp '$(MISC_LOOP_OMP)'
+MISC_LOOP_ORDER		:=	DOMAIN_LOOP_DIMS
+MISC_LOOP_CODE		:=	$(MISC_LOOP_MODS) omp loop($(MISC_LOOP_ORDER)) { }
 
 # Source dirs.
 VPATH	:=	$(patsubst $space,$colon,$(COMM_DIR) $(COEFF_DIR) $(YK_LIB_SRC_DIR))

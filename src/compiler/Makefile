@@ -59,10 +59,13 @@ YC_STENCIL_OBJS		:=	$(addprefix $(YC_STENCIL_OBJ_DIR)/,$(addsuffix .o,$(YC_STENC
 
 # Compiler and default flags.
 YC_CXX    	:=	$(CXX)
+ifeq ($(shell which $(YC_CXX)),)
+ $(error "$(YC_CXX) not found in PATH, set YC_CXX to desired compiler")
+endif
 YC_CXXOPT	?= 	-O2
 YC_CXXDBG	?=	-g
-YC_CXXFLAGS 	:=
-YC_CXXWARN	:=	-Wall -Wno-unknown-pragmas -Wno-unused-variable
+YC_CXXFLAGS 	:=	-DFORCE_INLINE_RECURSIVE= -DFORCE_INLINE=
+YC_CXXWARN	:=	-Wall -Wno-unused-variable
 YC_CXXFLAGS_API	:=	-std=c++17 $(YC_CXXWARN)
 YC_CXX_INCFLAGS 	:=	$(addprefix -I,$(YC_INC_DIRS))
 YC_CXX_INCFLAGS_API	:=	$(addprefix -I,$(INC_DIR))

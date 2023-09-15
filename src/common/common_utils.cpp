@@ -43,8 +43,11 @@ namespace yask {
     // fields to allow proper alphanumeric sorting
     // for numbers above 9 (at least up to 99).
 
+    // TODO: conform to Semantic Versioning:
+    // https://semver.org/.
+
     // Format: "major.minor.patch[-alpha|-beta]".
-    const string version = "4.04.05";
+    const string version = "4.04.06";
 
     string yask_get_version_string() {
         return version;
