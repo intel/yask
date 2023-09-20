@@ -70,9 +70,19 @@ endif
 
 # YASK compiler settings for offload.
 ifeq ($(offload),1)
- inner_loop_dim 	:=	1
- outer_domain_layout	:=	1
+
+ # BKMs for Intel GPUs.
+ ifeq ($(cxx_is_llvm_intel),1)
+  outer_domain_layout	:=	1
+  early_loads		:=	0
+  min_buffer_len	:=	1
+  inner_loop_dim 	:=	1
+ endif
+
+ # BKMs for Nvidia GPUs.
  ifeq ($(cxx_is_nv),1)
+  outer_domain_layout	:=	0
+  early_loads		:=	0
   min_buffer_len	:=	99
  endif
 endif
