@@ -205,7 +205,7 @@ namespace yask {
                     // Start threads within a block.  Each of these threads
                     // will eventually work on a separate nano-block.  This
                     // is nested within an OMP outer thread.
-                    _Pragma("omp parallel proc_bind(spread)") {
+                    _Pragma("omp parallel") {
                         assert(omp_get_level() == 2);
                         assert(omp_get_num_threads() == nbt);
                         int inner_thread_idx = omp_get_thread_num();
