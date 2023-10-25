@@ -70,9 +70,19 @@ endif
 
 # YASK compiler settings for offload.
 ifeq ($(offload),1)
- inner_loop_dim 	:=	1
- outer_domain_layout	:=	1
+
+ # BKMs for Intel GPUs.
+ ifeq ($(cxx_is_llvm_intel),1)
+  outer_domain_layout	:=	1
+  early_loads		:=	0
+  min_buffer_len	:=	1
+  inner_loop_dim 	:=	1
+ endif
+
+ # BKMs for Nvidia GPUs.
  ifeq ($(cxx_is_nv),1)
+  outer_domain_layout	:=	0
+  early_loads		:=	0
   min_buffer_len	:=	99
  endif
 endif
@@ -482,7 +492,11 @@ RANK_LOOP_CODE		:=	$(RANK_LOOP_MODS) loop($(RANK_LOOP_ORDER)) { }
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
 # to a top-level OpenMP thread.
 MEGA_BLOCK_LOOP_MODS	:=
-MEGA_BLOCK_LOOP_OMP	:=	omp parallel for schedule(dynamic,1) proc_bind(spread)
+ifeq ($(cxx_is_llvm_intel),1)
+ MEGA_BLOCK_LOOP_OMP	:=	omp parallel for schedule(dynamic,1) proc_bind(spread)
+else
+ MEGA_BLOCK_LOOP_OMP	:=	omp parallel for schedule(dynamic,1)
+endif
 MEGA_BLOCK_LOOP_FLAGS	:=	-prefix mega_block_ -omp '$(MEGA_BLOCK_LOOP_OMP)'
 MEGA_BLOCK_LOOP_ORDER	:=	DOMAIN_LOOP_DIMS
 MEGA_BLOCK_LOOP_CODE	:=	$(MEGA_BLOCK_LOOP_MODS) omp loop($(MEGA_BLOCK_LOOP_ORDER)) { } 
@@ -501,7 +515,11 @@ BLOCK_LOOP_CODE		:=	$(BLOCK_LOOP_MODS) loop($(BLOCK_LOOP_ORDER)) { }
 # nested OpenMP thread. The OpenMP construct is not used when running with
 # '-bind_inner_threads' because another parallel section is created.
 MICRO_BLOCK_LOOP_MODS	:=
-MICRO_BLOCK_LOOP_OMP	:=	omp parallel for schedule(static,1) proc_bind(spread)
+ifeq ($(cxx_is_llvm_intel),1)
+ MICRO_BLOCK_LOOP_OMP	:=	omp parallel for schedule(static,1) proc_bind(spread)
+else
+ MICRO_BLOCK_LOOP_OMP	:=	omp parallel for schedule(static,1)
+endif
 MICRO_BLOCK_LOOP_FLAGS	:=	-prefix micro_block_ -omp '$(MICRO_BLOCK_LOOP_OMP)'
 MICRO_BLOCK_LOOP_ORDER	:=	DOMAIN_LOOP_DIMS
 MICRO_BLOCK_LOOP_CODE	:=	$(MICRO_BLOCK_LOOP_MODS) omp loop($(MICRO_BLOCK_LOOP_ORDER)) { }

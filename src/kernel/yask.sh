@@ -448,7 +448,7 @@ if [[ $doval == 1 ]]; then
 fi
 
 # Commands to capture some important system status and config info for benchmark documentation.
-config_cmds="sleep 1; uptime; lscpu; cpuinfo -A; sed '/^$/q' /proc/cpuinfo; cpupower frequency-info; uname -a; $dump /etc/system-release; $dump /proc/cmdline; $dump /proc/meminfo; free -gt; numactl -H; ulimit -a; ipcs -l; env | awk '/YASK/ { print \"env:\", \$1 }'"
+config_cmds="sleep 1; uptime; lscpu; cpuinfo -A; sed '/^$/q' /proc/cpuinfo; cpupower frequency-info; uname -a; $dump /etc/system-release; $dump /proc/cmdline; $dump /proc/meminfo; free -gt; numactl -H; ulimit -a; ipcs -l; module list; env | awk '/YASK/ { print \"env:\", \$1 }'"
 
 # Add settings for offload kernel.
 if [[ $is_offload == 1 ]]; then
