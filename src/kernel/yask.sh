@@ -61,13 +61,23 @@ if [[ ! -z ${SLURM_JOB_NUM_NODES:+x} ]]; then
     nnodes=$SLURM_JOB_NUM_NODES
 fi
 
+# Default number of GPUs.
+ngpus=0
+if command -v xpu-smi >/dev/null; then
+    ngpus=`xpu-smi topology -m | grep -c '^GPU'`
+elif command -v nvidia-smi >/dev/null; then
+    ngpus=`nvidia-smi | awk '/Attached GPUs/ { print NF-1 }'`
+fi
+
 # Default MPI ranks.
 # Try Slurm var, then numactl, then lscpu.
 # For latter two, the goal is to count only NUMA nodes with CPUs.
 # (Systems with HBM may have NUMA nodes without CPUs.)
 nranks=1
+nranks_is_def=1  # nranks has been set for CPU only.
 if [[ ! -z ${SLURM_NTASKS:+x} && $SLURM_NTASKS > $nnodes ]]; then
     nranks=$SLURM_NTASKS
+    nranks_is_def=0
 elif command -v numactl >/dev/null; then
     ncpubinds=`numactl -s | awk '/^cpubind:/ { print NF-1 }'`
     if [[ -n "$ncpubinds" ]]; then
@@ -79,10 +89,15 @@ elif command -v lscpu >/dev/null; then
         nranks=$(( $nnumas * $nnodes ))
     fi
 fi
+nranks_offload=$nnodes
+if [[ $ngpus > 0 ]]; then
+    nranks_offload=$(( $ngpus * $nnodes ))
+fi
+mpi_always=0
 
 # Other defaults.
-pre_cmd=":"
-post_cmd=""
+pre_cmd=":"  # "colon" command is a no-op.
+post_cmd=":"
 helping=0
 opts=""
 bindir=`dirname $0`
@@ -152,15 +167,18 @@ while true; do
         echo "     If -mpi_cmd is used, the -ranks option is used only for computing the"
         echo "       default number of OpenMP threads to use."
         echo "     If -mpi_cmd and -exe_prefix are both specified, this one is used first."
+        echo "  -mpi_always"
+        echo "     Generate a default 'mpirun' prefix even if there is only 1 rank to run."
         echo "  -ranks <N>"
         echo "     Run the YASK executable on <N> MPI ranks."
-        echo "     Shortcut for the following option if <N> > 1:"
+        echo "     Shortcut for the following option if <N> > 1 or -mpi_always was specified:"
         echo "       -mpi_cmd 'mpirun -np <N>'"
         echo "     If a different MPI command is needed, use -mpi_cmd <command> explicitly."
         echo "     If the env var SLURM_NTASKS is set AND if it greater than the number of nodes,"
         echo "        the default is its value."
-        echo "     Otherwise, the default is based on the number of NUMA nodes on the current host."
-        echo "     The current default is $nranks."
+        echo "     Otherwise, the default is based on the number of NUMA nodes on the current host"
+        echo "        for CPU kernels or the number of GPUs on the current host for offload kernels."
+        echo "     The current default is $nranks for CPU kernels and $nranks_offload for offload kernels."
         echo "  -nodes <N>"
         echo "     Set the number of nodes."
         echo "     This is used to compute the default number of OpenMP threads to use per rank."
@@ -200,6 +218,7 @@ while true; do
     elif [[ "$1" == "-help" ]]; then
         helping=1
         nranks=1
+        nranks_is_def=0
         logfile='/dev/null'
 
         # Pass option to executable.
@@ -271,7 +290,12 @@ while true; do
 
     elif [[ "$1" == "-ranks" && -n ${2+set} ]]; then
         nranks=$2
+        nranks_is_def=0
         shift
+        shift
+
+    elif [[ "$1" == "-mpi_always" ]]; then
+        mpi_always=1
         shift
 
     elif [[ "$1" == "-nodes" && -n ${2+set} ]]; then
@@ -332,8 +356,19 @@ if [[ -z ${stencil:+x} ]]; then
     show_stencils
 fi
 
+# Heuristic to determine if this is an offload kernel.
+is_offload=0
+if [[ $arch =~ "offload" ]]; then
+    is_offload=1
+
+    # Heuristics for MPI ranks for offload.
+    if [[ $nranks_is_def == 1 ]]; then
+        nranks=$nranks_offload
+    fi
+fi
+
 # Set MPI command default.
-if [[ $nranks > 1 ]]; then
+if [[ $nranks > 1 || $mpi_always == 1 ]]; then
     : ${mpi_cmd="mpirun -np $nranks"}
 
     # Add default Intel MPI settings.
@@ -374,12 +409,6 @@ tag=$stencil.$arch
 : ${exe:="$bindir/yask_kernel.$tag.exe"}
 make_report="$bindir/../build/yask_kernel.$tag.make-report.txt"
 yc_report="$bindir/../build/yask_kernel.$tag.yask_compiler-report.txt"
-
-# Heuristic to determine if this is an offload kernel.
-is_offload=0
-if [[ $arch =~ "offload" ]]; then
-    is_offload=1
-fi
 
 # Double-check that exe exists.
 if [[ ! -x $exe ]]; then
@@ -448,34 +477,61 @@ if [[ $doval == 1 ]]; then
 fi
 
 # Commands to capture some important system status and config info for benchmark documentation.
-config_cmds="sleep 1; uptime; lscpu; cpuinfo -A; sed '/^$/q' /proc/cpuinfo; cpupower frequency-info; uname -a; $dump /etc/system-release; $dump /proc/cmdline; $dump /proc/meminfo; free -gt; numactl -H; ulimit -a; ipcs -l; module list; env | awk '/YASK/ { print \"env:\", \$1 }'"
+config_cmds="sleep 1"
+if command -v module >/dev/null; then
+    config_cmds+="; module list"
+fi
+config_cmds+="; echo 'Selected env vars:'; env | awk '/YASK|SLURM|HOSTNAME/ { print \"env:\", \$1 }'"
+config_cmds+="; set -x" # Start echoing commands before running them.
+config_cmds+="; uptime; uname -a; ulimit -a; $dump /etc/system-release; $dump /proc/cmdline; $dump /proc/meminfo; free -gt"
+if [[ -r /etc/system-release ]]; then
+    config_cmds+="; $dump /etc/system-release"
+fi
+if command -v lscpu >/dev/null; then
+    config_cmds+="; lscpu"
+fi
+if command -v cpuinfo >/dev/null; then
+    config_cmds+="; cpuinfo -A"
+fi
+if command -v cpupower >/dev/null; then
+    config_cmds+="; cpupower frequency-info"
+fi
+config_cmds+="; sed '/^$/q' /proc/cpuinfo"
+if command -v numactl >/dev/null; then
+    config_cmds+="; numactl -H"
+fi
+if command -v ipcx >/dev/null; then
+    config_cmds+="; ipcs -l"
+fi
 
 # Add settings for offload kernel.
 if [[ $is_offload == 1 ]]; then
-    config_cmds+="; clinfo -l";
-    if [[ $nranks > 1 ]]; then
-        envs+=" I_MPI_OFFLOAD_TOPOLIB=level_zero I_MPI_OFFLOAD=2"
-    else
-        envs+=" EnableImplicitScaling=1"
+    if command -v clinfo >/dev/null; then
+        config_cmds+="; clinfo -l";
+    fi
+    if command -v xpu-smi >/dev/null; then
+        config_cmds+="; xpu-smi discovery; xpu-smi topology -m";
+    fi
+    if command -v nvidia-smi >/dev/null; then
+        config_cmds+="; nvidia-smi";
+    fi
+    if [[ ! -z "$mpi_cmd" ]]; then
+        envs+=" I_MPI_OFFLOAD=2"
     fi
 fi
 
 # Command sequence to be run in a shell.
 exe_str="$mpi_cmd $exe_prefix $exe $opts"
-cmds="cd $dir; ulimit -s unlimited; $config_cmds; ldd $exe; date; $pre_cmd; env $envs $envs2 $exe_str"
-if [[ -n "$post_cmd" ]]; then
-    cmds+="; $post_cmd"
-fi
-cmds+="; date"
+cmds="cd $dir; ulimit -s unlimited; $config_cmds; ldd $exe; date; $pre_cmd; env $envs $envs2 $exe_str; $post_cmd; date"
 
 # Finally, invoke the binary in a shell.
 if [[ $dodry == 0 ]]; then
     echo "===================" | tee -a $logfile
     if [[ -z "$sh_prefix" ]]; then
-        sh -c -x "$cmds" 2>&1 | tee -a $logfile
+        sh -c "$cmds" 2>&1 | tee -a $logfile
     else
         echo "Running shell under '$sh_prefix'..."
-        $sh_prefix "sh -c -x '$cmds'" 2>&1 | tee -a $logfile
+        $sh_prefix "sh -c '$cmds'" 2>&1 | tee -a $logfile
     fi
     echo "===================" | tee -a $logfile
 fi
