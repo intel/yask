@@ -38,7 +38,7 @@ protected:
     MAKE_VAR(v, t, x, y, z, vidx);
     enum VIDX { V_BL_W, V_TL_V, V_TR_U };
 
-    // Time-varying 3D-spatial Stress vars.
+    // Time-varying 3D-spatial stress vars.
     MAKE_VAR(s, t, x, y, z, sidx);
     enum SIDX { S_BL_YZ, S_BR_XZ, S_TL_XX, S_TL_YY, S_TL_ZZ, S_TR_XY };
 
