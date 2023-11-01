@@ -280,6 +280,9 @@ YK_SCRIPT_FLAGS	+= "-stencil" $(YK_STENCIL) "-arch" $(YK_ARCH)
 ifeq ($(mpi),0)
  YK_SCRIPT_FLAGS += 	-ranks 1
 endif
+ifeq ($(offload),1)
+ YK_SCRIPT_FLAGS += 	-offload
+endif
 
 # Additional flags for building kernel lib.
 # These are not used for building apps that use only the APIs.
