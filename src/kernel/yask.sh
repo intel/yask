@@ -98,7 +98,7 @@ nranks_offload=$nnodes
 if [[ $ngpus > 0 ]]; then
     nranks_offload=$(( $ngpus * $nnodes ))
 fi
-mpi_always=0
+force_mpi=0
 
 # Other defaults.
 pre_cmd=":"  # "colon" command is a no-op.
@@ -176,11 +176,11 @@ while true; do
         echo "     If -mpi_cmd is used, the -ranks option is used only for computing the"
         echo "       default number of OpenMP threads to use."
         echo "     If -mpi_cmd and -exe_prefix are both specified, this one is used first."
-        echo "  -mpi_always"
+        echo "  -force_mpi"
         echo "     Generate a default 'mpirun' prefix even if there is only 1 rank to run."
         echo "  -ranks <N>"
         echo "     Run the YASK executable on <N> MPI ranks."
-        echo "     Shortcut for the following option if <N> > 1 or -mpi_always was specified:"
+        echo "     Shortcut for the following option if <N> > 1 or -force_mpi was specified:"
         echo "       -mpi_cmd 'mpirun -np <N>'"
         echo "     If a different MPI command is needed, use -mpi_cmd <command> explicitly."
         echo "     If the env var SLURM_NTASKS is set AND if it greater than the number of nodes,"
@@ -311,8 +311,8 @@ while true; do
         shift
         shift
 
-    elif [[ "$1" == "-mpi_always" ]]; then
-        mpi_always=1
+    elif [[ "$1" == "-force_mpi" ]]; then
+        force_mpi=1
         shift
 
     elif [[ "$1" == "-nodes" && -n ${2+set} ]]; then
@@ -388,7 +388,7 @@ if [[ $is_offload == 1 ]]; then
 fi
 
 # Set MPI command default.
-if [[ $nranks > 1 || $mpi_always == 1 ]]; then
+if [[ $nranks > 1 || $force_mpi == 1 ]]; then
     : ${mpi_cmd="mpirun -np $nranks"}
 
     # Add default Intel MPI settings.
