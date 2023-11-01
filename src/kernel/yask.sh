@@ -54,6 +54,7 @@ else
     def_arch=intel64
 fi
 arch=$def_arch
+arch_is_def_cpu=1  # arch has been set for CPU default only.
 
 # Default nodes.
 nnodes=1
@@ -61,23 +62,27 @@ if [[ ! -z ${SLURM_JOB_NUM_NODES:+x} ]]; then
     nnodes=$SLURM_JOB_NUM_NODES
 fi
 
-# Default number of GPUs.
+# Default type and number of GPUs.
 ngpus=0
+arch_offload="offload"
 if command -v xpu-smi >/dev/null; then
+    arch_offload="offload-spir64"
     ngpus=`xpu-smi topology -m | grep -c '^GPU'`
 elif command -v nvidia-smi >/dev/null; then
+    arch_offload="offload-nv"
     ngpus=`nvidia-smi | awk '/Attached GPUs/ { print NF-1 }'`
 fi
+is_offload=0
 
 # Default MPI ranks.
 # Try Slurm var, then numactl, then lscpu.
 # For latter two, the goal is to count only NUMA nodes with CPUs.
 # (Systems with HBM may have NUMA nodes without CPUs.)
-nranks=1
-nranks_is_def=1  # nranks has been set for CPU only.
+nranks=$nnodes
+nranks_is_def_cpu=1  # nranks has been set for CPU default only.
 if [[ ! -z ${SLURM_NTASKS:+x} && $SLURM_NTASKS > $nnodes ]]; then
     nranks=$SLURM_NTASKS
-    nranks_is_def=0
+    nranks_is_def_cpu=0
 elif command -v numactl >/dev/null; then
     ncpubinds=`numactl -s | awk '/^cpubind:/ { print NF-1 }'`
     if [[ -n "$ncpubinds" ]]; then
@@ -142,13 +147,17 @@ while true; do
         echo "     This will run the YASK executable with the '-help' option."
         echo "  -arch <name>"
         echo "     Specify the architecture-name part of the YASK executable."
-        echo "     Overrides the default architecture determined from /proc/cpuinfo flags."
-        echo "     The default arch for this host is '$def_arch'."
+        echo "     Overrides the default architecture determined from /proc/cpuinfo flags"
+        echo "     or the GPU system manangement software for offload kernels."
         echo "     Should correspond to arch=<name> used during compilation"
-        echo "     with '.offload-<offload_arch>' appended when built with 'offload=1',"
+        echo "     with '.offload-<offload_arch>' appended if built with 'offload=1',"
         echo "     or YK_ARCH=<name> if that was used to override the default."
         echo "     In any case, the '-stencil' and '-arch' args required to launch"
         echo "     any executable are printed at the end of a successful compilation."
+        echo "     The default for this host is '$def_arch' for CPU kernels"
+        echo "     and '$arch_offload' for offload kernels."
+        echo "  -offload"
+        echo "     Use an offloaded YASK kernel executable, built with 'offload=1'."
         echo "  -host <hostname>"
         echo "     Specify host to run YASK executable on."
         echo "     Run sub-shell under 'ssh <hostname>'."
@@ -218,7 +227,7 @@ while true; do
     elif [[ "$1" == "-help" ]]; then
         helping=1
         nranks=1
-        nranks_is_def=0
+        nranks_is_def_cpu=0
         logfile='/dev/null'
 
         # Pass option to executable.
@@ -236,8 +245,16 @@ while true; do
 
     elif [[ "$1" == "-arch" && -n ${2+set} ]]; then
         arch=$2
+        arch_is_def_cpu=0
+        if [[ $arch =~ "offload" ]]; then
+            is_offload=1
+        fi
         shift
         shift
+
+    elif [[ "$1" == "-offload" ]]; then
+        is_offload=1
+        exit 0
 
     elif [[ "$1" == "-host" && -n ${2+set} ]]; then
         host=$2
@@ -290,7 +307,7 @@ while true; do
 
     elif [[ "$1" == "-ranks" && -n ${2+set} ]]; then
         nranks=$2
-        nranks_is_def=0
+        nranks_is_def_cpu=0
         shift
         shift
 
@@ -356,14 +373,17 @@ if [[ -z ${stencil:+x} ]]; then
     show_stencils
 fi
 
-# Heuristic to determine if this is an offload kernel.
-is_offload=0
-if [[ $arch =~ "offload" ]]; then
-    is_offload=1
+# Offload settings.
+if [[ $is_offload == 1 ]]; then
 
     # Heuristics for MPI ranks for offload.
-    if [[ $nranks_is_def == 1 ]]; then
+    if [[ $nranks_is_def_cpu == 1 ]]; then
         nranks=$nranks_offload
+    fi
+
+    # Heuristics for offload arch.
+    if [[ $arch_is_def_cpu == 1 ]]; then
+        arch=$arch_offload
     fi
 fi
 
