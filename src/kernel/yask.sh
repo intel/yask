@@ -66,11 +66,11 @@ fi
 ngpus=0
 arch_offload="offload"
 if command -v xpu-smi >/dev/null; then
-    arch_offload="offload-spir64"
+    arch_offload="$def_arch.offload-spir64"
     ngpus=`xpu-smi topology -m | grep -c '^GPU'`
 elif command -v nvidia-smi >/dev/null; then
-    arch_offload="offload-nv"
-    ngpus=`nvidia-smi | awk '/Attached GPUs/ { print NF-1 }'`
+    arch_offload="$def_arch.offload-nv"
+    ngpus=`nvidia-smi topo -m | grep -c '^GPU'`
 fi
 is_offload=0
 
@@ -254,7 +254,7 @@ while true; do
 
     elif [[ "$1" == "-offload" ]]; then
         is_offload=1
-        exit 0
+        shift
 
     elif [[ "$1" == "-host" && -n ${2+set} ]]; then
         host=$2
