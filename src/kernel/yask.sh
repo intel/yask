@@ -477,12 +477,6 @@ echo "exe='$exe'" | tee -a $logfile
 echo "pre_cmd='$pre_cmd'" | tee -a $logfile
 echo "post_cmd='$post_cmd'" | tee -a $logfile
 
-# Output the SLURM env.
-if [[ `env | grep -c SLURM` > 0 ]]; then
-    echo "Slurm vars:" | tee -a $logfile
-    env | grep -E 'SBATCH|SLURM'
-fi
-
 # Dump most recent reports.
 if [[ -e $make_report ]]; then
     $dump $make_report >> $logfile
@@ -501,7 +495,8 @@ config_cmds="sleep 1"
 if command -v module >/dev/null; then
     config_cmds+="; module list"
 fi
-config_cmds+="; echo 'Selected env vars:'; env | awk '/YASK|SLURM|HOSTNAME/ { print \"env:\", \$1 }'"
+config_cmds+="; echo 'Selected env vars:'; env | awk '/YASK|SLURM|SBATCH|HOSTNAME/ { print \"env:\", \$1 }'"
+
 config_cmds+="; set -x" # Start echoing commands before running them.
 config_cmds+="; uptime; uname -a; ulimit -a; $dump /etc/system-release; $dump /proc/cmdline; $dump /proc/meminfo; free -gt"
 if [[ -r /etc/system-release ]]; then
