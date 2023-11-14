@@ -531,6 +531,9 @@ namespace yask {
                       " throughput (num-writes/sec):      " << make_num_str(p->writes_ps) << endl <<
                       " throughput (est-FLOPS):           " << make_num_str(p->flops) << endl <<
                       " throughput (num-points/sec):      " << make_num_str(p->pts_ps));
+
+            #if 0
+            // TODO: Fix this: the reported stage rates are often much too high, esp. for offload.
             if (psteps != steps_done) {
                 DEBUG_MSG(" Rate breakdown by stage(s):");
                 for (auto& sp : st_stages) {
@@ -543,6 +546,7 @@ namespace yask {
 
                 }
             }
+            #endif
         }
 
         // Clear counters.
