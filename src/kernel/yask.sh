@@ -58,8 +58,8 @@ arch_is_def_cpu=1  # arch has been set for CPU default only.
 
 # Default nodes.
 nnodes=1
-if [[ ! -z ${SLURM_JOB_NUM_NODES:+x} ]]; then
-    nnodes=$SLURM_JOB_NUM_NODES
+if [[ ! -z ${SLURM_NNODES:+x} ]]; then
+    nnodes=$SLURM_NNODES
 fi
 
 # Default type and number of GPUs.
@@ -173,27 +173,27 @@ while true; do
         echo "     Run YASK executable as an argument to <command>, e.g., 'numactl -N 0'."
         echo "  -mpi_cmd <command>"
         echo "     Run YASK executable as an argument to <command>, e.g., 'mpiexec.hydra -n 4'."
-        echo "     If -mpi_cmd is used, the -ranks option is used only for computing the"
-        echo "       default number of OpenMP threads to use."
         echo "     If -mpi_cmd and -exe_prefix are both specified, this one is used first."
+        echo "     The default command is based on the number of nodes and ranks (see below)."
         echo "  -force_mpi"
         echo "     Generate a default 'mpirun' prefix even if there is only 1 rank to run."
-        echo "  -ranks <N>"
-        echo "     Run the YASK executable on <N> MPI ranks."
-        echo "     Shortcut for the following option if <N> > 1 or -force_mpi was specified:"
-        echo "       -mpi_cmd 'mpirun -np <N>'"
+        echo "  -nodes <N>"
+        echo "     Set the number of nodes."
+        echo "     If the env var SLURM_NNODES is set, the default is its value."
+        echo "     Otherwise, the default is one (1)."
+        echo "     The current default is $nnodes."
+        echo "  -ranks <R>"
+        echo "     Run the YASK executable on <R> MPI ranks."
+        echo "     This value, along with the number of nodes, <N>, is used to set these defaults:"
+        echo "      - Number of MPI ranks per node to <R>/<N>."
+        echo "      - Number of OpenMP threads per rank based on core count (for CPU kernels only)."
+        echo "      - Default MPI command to 'mpirun -np <R> -ppn <R>/<N>'."
         echo "     If a different MPI command is needed, use -mpi_cmd <command> explicitly."
         echo "     If the env var SLURM_NTASKS is set AND if it greater than the number of nodes,"
         echo "        the default is its value."
         echo "     Otherwise, the default is based on the number of NUMA nodes on the current host"
         echo "        for CPU kernels or the number of GPUs on the current host for offload kernels."
         echo "     The current default is $nranks for CPU kernels and $nranks_offload for offload kernels."
-        echo "  -nodes <N>"
-        echo "     Set the number of nodes."
-        echo "     This is used to compute the default number of OpenMP threads to use per rank."
-        echo "     If the env var SLURM_JOB_NUM_NODES is set, the default is its value."
-        echo "     Otherwise, the default is one (1)."
-        echo "     The current default is $nnodes."
         echo "  -pre_cmd <command(s)>"
         echo "     One or more commands to run before YASK executable."
         echo "  -post_cmd <command(s)>"
@@ -388,8 +388,9 @@ if [[ $is_offload == 1 ]]; then
 fi
 
 # Set MPI command default.
+ppn=$(( $nranks / $nnodes ))
 if [[ $nranks > 1 || $force_mpi == 1 ]]; then
-    : ${mpi_cmd="mpirun -np $nranks"}
+    : ${mpi_cmd="mpirun -np $nranks -ppn $ppn"}
 
     # Add default Intel MPI settings.
     envs+=" I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5"
@@ -469,7 +470,7 @@ fi
 # Output some vars.
 echo "Num nodes:" $nnodes | tee -a $logfile
 echo "Num MPI ranks:" $nranks | tee -a $logfile
-echo "Num MPI ranks per node:" $(( $nranks / $nnodes )) | tee -a $logfile
+echo "Num MPI ranks per node:" $ppn | tee -a $logfile
 echo "sh_prefix='$sh_prefix'" | tee -a $logfile
 echo "mpi_cmd='$mpi_cmd'" | tee -a $logfile
 echo "exe_prefix='$exe_prefix'" | tee -a $logfile
@@ -495,7 +496,7 @@ config_cmds="sleep 1"
 if command -v module >/dev/null; then
     config_cmds+="; module list"
 fi
-config_cmds+="; echo 'Selected env vars:'; env | awk '/YASK|SLURM|SBATCH|HOSTNAME/ { print \"env:\", \$1 }'"
+config_cmds+="; echo 'Selected env vars:'; env | sort | awk '/YASK|SLURM|SBATCH|MPI|OMP/ { print \"env:\", \$1 }'"
 
 config_cmds+="; set -x" # Start echoing commands before running them.
 config_cmds+="; uptime; uname -a; ulimit -a; $dump /etc/system-release; $dump /proc/cmdline; $dump /proc/meminfo; free -gt"
