@@ -25,8 +25,11 @@ IN THE SOFTWARE.
 
 // Stencil equations for FSG elastic numerics.
 // Contributed by Albert Farres from the Barcelona Supercomputing Center.
-// This version varies from the original by grouping related vars into
-// larger vars with an added dimension.
+
+// This version varies from the original "fsg" version by grouping related
+// vars into larger vars with an added "misc" dimension. In other words, the
+// memory layout is different, but all the calculations are the same. Thus,
+// the performance can be fairly compared between the two.
 
 // YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.
 #include "yask_compiler_api.hpp"
@@ -481,15 +484,15 @@ namespace fsg {
 
 
     struct FSGElastic2Stencil : public FSGElastic2StencilBase {
-        FSGElastic2Stencil() :
-            FSGElastic2StencilBase("fsg_merged") { }
+        FSGElastic2Stencil(string name="fsg2") :
+            FSGElastic2StencilBase(name) { }
     };
 
     struct FSG2ABCElasticStencil : public FSGElastic2StencilBase {
         FSG2_ABC abc; // Absorbing Boundary Condition.
 
-        FSG2ABCElasticStencil() :
-            FSGElastic2StencilBase("fsg_merged_abc", &abc),
+        FSG2ABCElasticStencil(string name="fsg2_abc") :
+            FSGElastic2StencilBase(name, &abc),
             abc(*this) { }
     };
 
@@ -503,5 +506,21 @@ namespace fsg {
     // '-stencil' commmand-line option or the 'stencil=' build option.
     REGISTER_SOLUTION(FSG2ABCElasticStencil);
 
+    // Copies of FSG2* with old names for backward-compatibility.
+    class FSGElasticMStencil : public FSGElastic2Stencil {
+    public:
+        FSGElasticMStencil(string name="fsg_merged") :
+            FSGElastic2Stencil(name)
+        { }
+    };
+    REGISTER_SOLUTION(FSGElasticMStencil);
+    class FSGABCElasticMStencil : public FSG2ABCElasticStencil {
+    public:
+        FSGABCElasticMStencil(string name="fsg_merged_abc") :
+            FSG2ABCElasticStencil(name)
+        { }
+    };
+    REGISTER_SOLUTION(FSGABCElasticMStencil);
+
 }
- 
+     
