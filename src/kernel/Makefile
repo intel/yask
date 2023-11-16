@@ -1131,12 +1131,12 @@ single-stencil-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=iso3dfd radius=3 $(call FOLD,x=2 y=2) domain_dims=z,x,y
 	$(MAKE) clean; $(STENCIL_TEST) stencil=iso3dfd_sponge radius=6 $(call FOLD,x=2 z=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=ssg $(call FOLD,x=2 y=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=ssg_merged $(call FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=ssg2 $(call FOLD,x=2 y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=awp $(call FOLD,x=2 y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=awp_abc $(call FOLD,x=2 z=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=tti $(call FOLD,x=2 y=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=fsg_merged $(call FOLD,x=2 y=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=fsg_merged_abc $(call FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=fsg2 $(call FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=fsg2_abc $(call FOLD,x=2 y=2)
 
 # 3D tests w/seismic stencils that may generate too many kernel parameters for offload.
 3d-tests4:
