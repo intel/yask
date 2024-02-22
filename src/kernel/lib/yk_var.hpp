@@ -563,6 +563,61 @@ namespace yask {
         // Index for distinguishing my var from neighbors' vars.
         enum dirty_idx { self, others };
 
+        // Reduction result.
+        class red_res : public yk_var::yk_reduction_result {
+
+        protected:
+            char _pad[CACHELINE_BYTES]; // prevent false sharing.
+
+        public:
+            int _mask = 0;
+            idx_t _nred = 0;
+            double _sum = 0.0;
+            double _sum_sq = 0.0;
+            double _prod = 1.0;
+            double _max = DBL_MIN;
+            double _min = DBL_MAX;
+
+            virtual ~red_res() { }
+        
+            /// Get the allowed reductions.
+            int get_reduction_mask() const {
+                return _mask;
+            }
+        
+            /// Get the number of elements reduced.
+            idx_t get_num_elements_reduced() const {
+                return _nred;
+            }
+        
+            /// Get results
+            double get_sum() const {
+                if (_mask & yk_var::yk_sum_reduction)
+                    return _sum;
+                THROW_YASK_EXCEPTION("Sum reduction result was not requested in reduction_mask");
+            }
+            double get_sum_squares() const {
+                if (_mask & yk_var::yk_sum_squares_reduction)
+                    return _sum;
+                THROW_YASK_EXCEPTION("Sum-of-squares reduction result was not requested in reduction_mask");
+            }
+            double get_product() const {
+                if (_mask & yk_var::yk_product_reduction)
+                    return _prod;
+                THROW_YASK_EXCEPTION("Product reduction result was not requested in reduction_mask");
+            }
+            double get_max() const {
+                if (_mask & yk_var::yk_max_reduction)
+                    return _max;
+                THROW_YASK_EXCEPTION("Max reduction result was not requested in reduction_mask");
+            }
+            double get_min() const {
+                if (_mask & yk_var::yk_sum_reduction)
+                    return _min;
+                THROW_YASK_EXCEPTION("Min reduction result was not requested in reduction_mask");
+            }
+        };
+        
     protected:
 
         // Ptr to the core data.
@@ -610,7 +665,7 @@ namespace yask {
 
         // Coherency of device data.
         Coherency _coh;
-        
+
         // Convenience function to format indices like
         // "x=5, y=3".
         virtual std::string make_index_string(const Indices& idxs,
@@ -953,61 +1008,6 @@ namespace yask {
             #endif
         }
 
-        // Reduction result.
-        class red_res : public yk_var::yk_reduction_result {
-
-        protected:
-            char _pad[CACHELINE_BYTES]; // prevent false sharing.
-
-        public:
-            int _mask = 0;
-            idx_t _nred = 0;
-            double _sum = 0.0;
-            double _sum_sq = 0.0;
-            double _prod = 1.0;
-            double _max = DBL_MIN;
-            double _min = DBL_MAX;
-
-            virtual ~red_res() { }
-        
-            /// Get the allowed reductions.
-            int get_reduction_mask() const {
-                return _mask;
-            }
-        
-            /// Get the number of elements reduced.
-            idx_t get_num_elements_reduced() const {
-                return _nred;
-            }
-        
-            /// Get results
-            double get_sum() const {
-                if (_mask & yk_var::yk_sum_reduction)
-                    return _sum;
-                THROW_YASK_EXCEPTION("Sum reduction result was not requested in reduction_mask");
-            }
-            double get_sum_squares() const {
-                if (_mask & yk_var::yk_sum_squares_reduction)
-                    return _sum;
-                THROW_YASK_EXCEPTION("Sum-of-squares reduction result was not requested in reduction_mask");
-            }
-            double get_product() const {
-                if (_mask & yk_var::yk_product_reduction)
-                    return _prod;
-                THROW_YASK_EXCEPTION("Product reduction result was not requested in reduction_mask");
-            }
-            double get_max() const {
-                if (_mask & yk_var::yk_max_reduction)
-                    return _max;
-                THROW_YASK_EXCEPTION("Max reduction result was not requested in reduction_mask");
-            }
-            double get_min() const {
-                if (_mask & yk_var::yk_sum_reduction)
-                    return _min;
-                THROW_YASK_EXCEPTION("Min reduction result was not requested in reduction_mask");
-            }
-        };
-        
         // Reductions.
         virtual yk_var::yk_reduction_result_ptr
         reduce_elements_in_slice(int reduction_mask,
@@ -1414,15 +1414,16 @@ namespace yask {
             // Make array of results, one for each thread,
             // so we don't have to use atomics or critical sections.
             int nthr = yask_get_num_threads();
-            red_res resa[nthr];
+            std::vector<red_res> rrv;
+            rrv.resize(nthr);
             for (int i = 0; i < nthr; i++)
-                resa[i]._mask = reduction_mask;
+                rrv[i]._mask = reduction_mask;
         
             // Call the generic visit.
             // TODO: clean up ptr cast.
             auto n = dynamic_cast<VarT*>(const_cast<YkVarBase*>(this))->template
                 _visit_elements_in_slice<RedElem, T, VarT>(strict_indices,
-                                                           (T*)resa, IDX_MAX, 0,
+                                                           (T*)rrv.data(), IDX_MAX, 0,
                                                            first_indices, last_indices,
                                                            on_device);
 
@@ -1434,11 +1435,12 @@ namespace yask {
             // Join per-thread results.
             for (int i = 0; i < nthr; i++) {
                 auto* p = resp.get();
-                p->_sum += resa[i]._sum;
-                p->_sum_sq += resa[i]._sum;
-                p->_prod *= resa[i]._prod;
-                p->_max = std::max(p->_max, resa[i]._max);
-                p->_min = std::min(p->_min, resa[i]._min);
+                auto* resp = &rrv.at(i);
+                p->_sum += resp->_sum;
+                p->_sum_sq += resp->_sum;
+                p->_prod *= resp->_prod;
+                p->_max = std::max(p->_max, resp->_max);
+                p->_min = std::min(p->_min, resp->_min);
             }
 
             return resp;
