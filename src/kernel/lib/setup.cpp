@@ -254,8 +254,12 @@ namespace yask {
         rank_domain_offsets.set_vals_same(0);
 
         // Tables to share data across ranks.
-        idx_t coords[nr][nddims]; // rank indices.
-        idx_t rsizes[nr][nddims]; // rank sizes.
+        vector<vector<idx_t>> coords(nr); // rank indices.
+        vector<vector<idx_t>> rsizes(nr); // rank sizes.
+        for (int rn = 0; rn < nr; rn++) {
+            coords[rn].resize(nddims);
+            rsizes[rn].resize(nddims);
+        }
 
         // Two passes over ranks:
         // 0: sum all specified local sizes.
@@ -274,9 +278,9 @@ namespace yask {
 
             // Exchange coord and size info between all ranks.
             for (int rn = 0; rn < nr; rn++) {
-                MPI_Bcast(&coords[rn][0], nddims, MPI_INTEGER8,
+                MPI_Bcast(coords[rn].data(), nddims, MPI_INTEGER8,
                           rn, env->comm);
-                MPI_Bcast(&rsizes[rn][0], nddims, MPI_INTEGER8,
+                MPI_Bcast(rsizes[rn].data(), nddims, MPI_INTEGER8,
                           rn, env->comm);
             }
             // Now, the tables are filled in for all ranks.

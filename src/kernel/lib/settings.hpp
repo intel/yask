@@ -570,6 +570,8 @@ namespace yask {
         std::vector<MPI_Request> send_reqs;
         std::vector<MPI_Status> recv_stats;
         std::vector<MPI_Status> send_stats;
+        std::vector<MPI_Status> stats;
+        std::vector<int> indices;
 
         MPIData(MPIInfoPtr mpi_info) :
             _mpi_info(mpi_info) {
@@ -586,6 +588,8 @@ namespace yask {
             memset(&nullst, 0, sizeof(nullst));
             recv_stats.resize(n, nullst);
             send_stats.resize(n, nullst);
+            stats.resize(n, nullst);
+            indices.resize(n, 0);
         }
 
         void reset_locks() {
