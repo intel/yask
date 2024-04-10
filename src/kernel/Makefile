@@ -881,7 +881,6 @@ help:
 	@echo "Example debug builds of kernel cmd-line tool:"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 omp=0 YK_CXXOPT='-O0' check=1 # No optimization, OpenMP, or MPI; use internal checking"; \
 	echo " $(MAKE) clean; $(MAKE) -j arch=avx2 stencil=test_2d YK_CXXOPT='-O0' trace=1   # Enable tracing; run with '-trace' to get trace"; \
-	#echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=ssg radius=0 fold='x=1,y=1,z=1' YK_CXXOPT='-O0' trace_mem=1 # Trace all mem accesses with '-trace'"; \
 	echo " "
 	@echo "Example regression tests (run before any git push or pull request):"; \
 	echo " $(MAKE) -j all                           # Normal full API and stencil tests"; \
@@ -1090,7 +1089,7 @@ single-stencil-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_empty_2d
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d YK_STENCIL_SUFFIX=-t1 $(call FOLD,x=2 y=2) inner_loop_dim=1
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d YK_STENCIL_SUFFIX=-t2 $(call FOLD,x=2 y=2) inner_loop_dim=2
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d YK_STENCIL_SUFFIX=-t3 arch=intel64 $(call FOLD,x=3 y=2) domain_dims=y,x
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d YK_STENCIL_SUFFIX=-t3 arch=intel64 domain_dims=y,x
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_reverse_2d YK_STENCIL_SUFFIX=-t1 radius=1
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_2d $(call FOLD,x=2 y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d YK_STENCIL_SUFFIX=-t1 $(call FOLD,x=2 y=2) inner_misc_layout=0 outer_domain_layout=0
