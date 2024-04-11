@@ -68,6 +68,8 @@ and Intel(R) graphics processors.
 
 ## Backward-compatibility notices
 ### Version 4
+* Version 4.05.00 removes the "out-of-band" genetic-algorithm tuning script
+    due to lack of resources for maintenance and testing.
 * Version 4.04.00 deprecates the existing `void* {set,get}_elements_in_slice()`
     APIs and provides safer `float*` and `double*` versions.
 * Version 4.03.00 is a significant release with the following notices:

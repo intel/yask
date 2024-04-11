@@ -516,13 +516,12 @@ namespace yask {
             auto* var_send_reqs = var_mpi_data.send_reqs.data();
             auto* var_recv_stats = var_mpi_data.recv_stats.data();
             auto* var_send_stats = var_mpi_data.send_stats.data();
+            auto* stats = var_mpi_data.stats.data();
+            auto* indices = var_mpi_data.indices.data();
 
             #ifndef USE_INDIV_MPI_TESTS
             
             // Bulk testing.
-            auto asize = max(var_mpi_data.recv_reqs.size(), var_mpi_data.send_reqs.size());
-            int indices[asize];
-            MPI_Status stats[asize];
             int n = 0;
             MPI_Testsome(int(var_mpi_data.recv_reqs.size()), var_recv_reqs, &n, indices, stats);
             num_tests++;

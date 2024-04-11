@@ -58,7 +58,7 @@ namespace yask {
         int m_idx = (order+1)*num_points;
         int n_idx = num_points;
         int dsz = m_idx * n_idx;
-        double d[dsz];
+        vector<double> d(dsz);
     
         for (int i = 1; i < dsz; i++)
             d[i] = 0.0;
