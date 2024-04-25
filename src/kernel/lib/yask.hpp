@@ -74,6 +74,8 @@ typedef int MPI_Status;
 #include <unordered_set>
 #include <sstream>
 #include <stdexcept>
+#include <limits>
+
 #include <malloc.h>
 #include <stddef.h>
 #include <time.h>

@@ -249,7 +249,7 @@ int main(int argc, char** argv) {
         soln->get_var("depth")->set_element(h, {});
 
         // Buffer used to copy slices of data to/from YASK var.
-        double ebuf[ysz];
+        auto* ebuf = new double[ysz];
         
         // Init vars.
         e->set_all_elements_same(0.0);
@@ -392,6 +392,9 @@ int main(int argc, char** argv) {
         }
         #endif
 
+        // Free buffer.
+        delete[] ebuf;
+        
         // Report global stats.
         if (rank_num == msg_rank) {
             oerr_L2 = sqrt(oerr_L2);

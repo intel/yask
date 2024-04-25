@@ -575,8 +575,8 @@ namespace yask {
             double _sum = 0.0;
             double _sum_sq = 0.0;
             double _prod = 1.0;
-            double _max = DBL_MIN;
-            double _min = DBL_MAX;
+            double _max = std::numeric_limits<double>::min();
+            double _min = std::numeric_limits<double>::max();
 
             virtual ~red_res() { }
         
@@ -1120,7 +1120,7 @@ namespace yask {
                       make_index_string(range));
             if (ne <= 0)
                 return 0;
-            if (buffer_size < ne)
+            if (buffer_size < size_t(ne))
                 THROW_YASK_EXCEPTION(std::string("call to '") +
                                      Visitor::fname() + "' with buffer of size " +
                                      std::to_string(buffer_size) + "; " +

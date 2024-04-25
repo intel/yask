@@ -394,6 +394,7 @@ if [[ $nranks > 1 || $force_mpi == 1 ]]; then
 
     # Add default Intel MPI settings.
     envs+=" I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5"
+    envs+=" I_MPI_PIN_DOMAIN=numa"
 
     # Check whether HBM policy setting is allowed.
     if [[ `I_MPI_HBW_POLICY=hbw_preferred,hbw_preferred mpirun -np 1 /bin/date |& grep -c 'Unknown memory policy'` == 0 ]]; then

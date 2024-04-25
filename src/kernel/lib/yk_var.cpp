@@ -90,7 +90,7 @@ namespace yask {
             }
         }
         assert(dim_names.size() ==
-               _num_step_dims + _num_domain_dims + _num_misc_dims);
+               size_t(_num_step_dims + _num_domain_dims + _num_misc_dims));
     }
     
 

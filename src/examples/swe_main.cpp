@@ -320,12 +320,12 @@ int main(int argc, char** argv) {
         double t_export = 0.02;
 
         // Some 1D buffers used to copy slices of data to/from YASK vars.
-        double hbuf[ysz];
-        double ebuf[ysz];
-        double ubuf[ysz];
-        double vbuf[ysz];
-        double keHbuf[ysz];
-        double pebuf[ysz];
+        auto* hbuf = new double[ysz];
+        auto* ebuf = new double[ysz];
+        auto* ubuf = new double[ysz];
+        auto* vbuf = new double[ysz];
+        auto* keHbuf = new double[ysz];
+        auto* pebuf = new double[ysz];
 
         // Init whole vars to default values.
         h->set_all_elements_same(1.0);
@@ -601,6 +601,14 @@ int main(int argc, char** argv) {
         }
         #endif
 
+        // Free buffers.
+        delete[] hbuf;
+        delete[] ebuf;
+        delete[] ubuf;
+        delete[] vbuf;
+        delete[] keHbuf;
+        delete[] pebuf;
+        
         // Report global error.
         if (rank_num == msg_rank) {
             gerr_L2 = sqrt(gerr_L2);
