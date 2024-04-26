@@ -58,7 +58,7 @@ arch_is_def_cpu=1  # arch has been set for CPU default only.
 
 # Default nodes.
 nnodes=1
-if [[ ! -z ${SLURM_NNODES:+x} ]]; then
+if [[ -n "$SLURM_NNODES" ]]; then
     nnodes=$SLURM_NNODES
 fi
 
@@ -74,25 +74,24 @@ elif command -v nvidia-smi >/dev/null; then
 fi
 is_offload=0
 
-# Default MPI ranks.
-# Try Slurm var, then numactl, then lscpu.
-# For latter two, the goal is to count only NUMA nodes with CPUs.
+# Get NUMA nodes.
+# The goal is to count only NUMA nodes with CPUs.
 # (Systems with HBM may have NUMA nodes without CPUs.)
-nranks=$nnodes
-nranks_is_def_cpu=1  # nranks has been set for CPU default only.
-if [[ ! -z ${SLURM_NTASKS:+x} && $SLURM_NTASKS > $nnodes ]]; then
-    nranks=$SLURM_NTASKS
-    nranks_is_def_cpu=0
-elif command -v numactl >/dev/null; then
-    ncpubinds=`numactl -s | awk '/^cpubind:/ { print NF-1 }'`
-    if [[ -n "$ncpubinds" ]]; then
-        nranks=$(( $ncpubinds * $nnodes ))
-    fi
+if command -v numactl >/dev/null; then
+    nnumas=`numactl -s | awk '/^cpubind:/ { print NF-1 }'`
 elif command -v lscpu >/dev/null; then
     nnumas=`lscpu | grep -c '^NUMA node.*CPU'`
-    if [[ -n "$nnumas" ]]; then
-        nranks=$(( $nnumas * $nnodes ))
-    fi
+fi
+
+# Default MPI ranks.
+# Try Slurm var, then num NUMA nodes.
+nranks=$nnodes
+nranks_is_def_cpu=1  # nranks has been set for CPU default only.
+if [[ -n "$SLURM_NTASKS" && $SLURM_NTASKS > $nnodes ]]; then
+    nranks=$SLURM_NTASKS
+    nranks_is_def_cpu=0
+elif [[ -n "$nnumas" ]]; then
+    nranks=$(( $nnumas * $nnodes ))
 fi
 nranks_offload=$nnodes
 if [[ $ngpus > 0 ]]; then
@@ -368,7 +367,7 @@ done                            # parsing options.
 echo $invo
 
 # Check required opt (yes, it's an oxymoron).
-if [[ -z ${stencil:+x} ]]; then
+if [[ -z "$stencil" ]]; then
     echo "error: missing required option: -stencil <name>"
     show_stencils
 fi
@@ -394,7 +393,12 @@ if [[ $nranks > 1 || $force_mpi == 1 ]]; then
 
     # Add default Intel MPI settings.
     envs+=" I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5"
-    envs+=" I_MPI_PIN_DOMAIN=numa"
+
+    # Add NUMA pinning if number of discovered NUMA nodes
+    # equals what is being used.
+    if [[ -n "$nnumas" && $nnumas == $ppn ]]; then
+        envs+=" I_MPI_PIN_DOMAIN=numa"
+    fi
 
     # Check whether HBM policy setting is allowed.
     if [[ `I_MPI_HBW_POLICY=hbw_preferred,hbw_preferred mpirun -np 1 /bin/date |& grep -c 'Unknown memory policy'` == 0 ]]; then
@@ -532,7 +536,7 @@ if [[ $is_offload == 1 ]]; then
     if command -v nvidia-smi >/dev/null; then
         config_cmds+="; nvidia-smi";
     fi
-    if [[ ! -z "$mpi_cmd" ]]; then
+    if [[ -n "$mpi_cmd" ]]; then
         envs+=" I_MPI_OFFLOAD=2"
     fi
 fi
