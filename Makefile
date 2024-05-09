@@ -292,6 +292,5 @@ all-tests: compiler-api common-unit-tests
 all:
 	$(MAKE) realclean
 	$(MAKE) tags
-	$(MAKE) default
-	$(MAKE) api-all
+	$(MAKE) docs
 	$(MAKE) all-tests

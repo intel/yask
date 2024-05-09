@@ -120,7 +120,7 @@ DBL_EPSILON_CXXFLAG	:=	-DDBL_EPSILON=2.2204460492503131e-16
 arch			?=	$(shell $(BASH) $(SRC_DIR)/kernel/yask.sh -show_arch)
 
 # Set 'stencil' to the name of the YASK solution to build.
-stencil			?=	iso3dfd
+stencil			?=	unspecified
 
 # Set 'real_bytes' to number of bytes in a float (4 or 8).
 real_bytes		?=	4
