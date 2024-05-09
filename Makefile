@@ -109,15 +109,15 @@ api-docs: docs/api/html/index.html
 compiler-api:
 	$(YC_MAKE) api
 
-kernel-api:
-	$(YK_MAKE) api
+cxx-kernel-api:
+	$(YK_MAKE) $@
 
 py-kernel-api:
-	$(YK_MAKE) py-api
-
-api:
-	$(YC_MAKE) $@
 	$(YK_MAKE) $@
+
+kernel-api: cxx-kernel-api py-kernel-api
+
+api: compiler-api kernel-api
 
 # Remove old generated API documents and make new ones.
 docs/api/html/index.html: include/*.hpp include/*/*.hpp docs/api/*.*

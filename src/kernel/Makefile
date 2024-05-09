@@ -704,10 +704,10 @@ headers: $(YK_GEN_HEADERS)
 # NB: must set stencil and arch to generate the desired kernel API.
 
 # Build C++ kernel API lib.
-cxx-api: $(YK_LIB)
+cxx-kernel-api: $(YK_LIB)
 
 # Build python kernel API lib.
-py-api: $(YK_PY_LIB)
+py-kernel-api: $(YK_PY_LIB)
 
 # Build C++ and Python kernel API libs.
 api: cxx-api py-api
@@ -750,11 +750,13 @@ NO_YC_MAKE_FLAGS := --new-file=$(YK_CODE_FILE)
 kernel-no-yc:
 	$(MAKE) $(NO_YC_MAKE_FLAGS) kernel
 
-cxx-api-no-yc:
+cxx-kernel-api-no-yc:
 	$(MAKE) $(NO_YC_MAKE_FLAGS) cxx-api
 
-py-api-no-yc:
+py-kernel-api-no-yc:
 	$(MAKE) $(NO_YC_MAKE_FLAGS) py-api
+
+kernel-api-no-yc: cxx-kernel-api-no-yc py-kernel-api-no-yc
 
 # Remove intermediate files.
 # Should not trigger remake of stencil compiler.

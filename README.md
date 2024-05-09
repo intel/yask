@@ -68,8 +68,12 @@ and Intel(R) graphics processors.
 
 ## Backward-compatibility notices
 ### Version 4
-* Version 4.05.03 removes the default stencil name "iso3dfd"; this means
+* Version 4.05.03 has a few notices:
+  - The default stencil name "iso3dfd" is removed; this means
     you must always set the stencil name when building a kernel -- there is no default.
+    If you get an error about the "undefined" stencil, this means you didn't set the
+    stencil name.
+  - Some of the API-related Makefile target names were changed for consistency.
 * Version 4.05.00 removes the "out-of-band" genetic-algorithm tuning script
     due to lack of resources for maintenance and testing.
 * Version 4.04.00 deprecates the existing `void* {set,get}_elements_in_slice()`
