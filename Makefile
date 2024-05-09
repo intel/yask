@@ -142,11 +142,11 @@ clean:
 	$(YK_MAKE) $@
 
 # Remove executables, generated documentation, etc. (not logs).
-# Use 'find *' instead of 'find .' to avoid searching in '.git'.
+# Avoid 'find .' to prevent searching in '.git'.
 realclean: clean
 	rm -rf $(LIB_OUT_DIR) $(BIN_OUT_DIR) $(BUILD_OUT_DIR)
 	rm -fv TAGS '*~'
-	- find src include utils docs -name '*~' -print -delete
+	- find src include utils docs yask -name '*~' -print -delete
 	- find src -name '*.optrpt' -print -delete
 	- find src -name __pycache__ -print -delete
 	$(YC_MAKE) $@
