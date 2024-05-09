@@ -293,4 +293,6 @@ all:
 	$(MAKE) realclean
 	$(MAKE) tags
 	$(MAKE) docs
+	$(MAKE) compiler
+	$(MAKE) compiler-api
 	$(MAKE) all-tests
