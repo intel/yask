@@ -704,13 +704,13 @@ headers: $(YK_GEN_HEADERS)
 # NB: must set stencil and arch to generate the desired kernel API.
 
 # Build C++ kernel API lib.
-kernel-api: $(YK_LIB)
+cxx-api: $(YK_LIB)
 
 # Build python kernel API lib.
 py-api: $(YK_PY_LIB)
 
 # Build C++ and Python kernel API libs.
-api: kernel-api py-api
+api: cxx-api py-api
 
 # Build C++ SWIG wrapper code.
 # This also creates $(YK_PY_MOD) as a side-effect.
@@ -750,8 +750,8 @@ NO_YC_MAKE_FLAGS := --new-file=$(YK_CODE_FILE)
 kernel-no-yc:
 	$(MAKE) $(NO_YC_MAKE_FLAGS) kernel
 
-api-no-yc:
-	$(MAKE) $(NO_YC_MAKE_FLAGS) api
+cxx-api-no-yc:
+	$(MAKE) $(NO_YC_MAKE_FLAGS) cxx-api
 
 py-api-no-yc:
 	$(MAKE) $(NO_YC_MAKE_FLAGS) py-api
@@ -950,7 +950,7 @@ cxx-yk-var-test:
 
 # Build C++ kernel tests.
 $(YK_API_TEST_EXEC): $(YK_TEST_SRC_DIR)/yask_kernel_api_test.cpp
-	$(TEST_MAKE) kernel-api allow_new_var_types=1 
+	$(TEST_MAKE) cxx-api allow_new_var_types=1 
 	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@
@@ -973,7 +973,7 @@ py-yk-api-test: $(YK_TEST_SRC_DIR)/yask_kernel_api_test.py
 
 # Build C++ kernel tests with exceptions.
 $(YK_API_TEST_EXEC_WITH_EXCEPTION): $(YK_TEST_SRC_DIR)/yask_kernel_api_exception_test.cpp
-	$(TEST_MAKE) kernel-api allow_new_var_types=1 
+	$(TEST_MAKE) cxx-api allow_new_var_types=1 
 	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@

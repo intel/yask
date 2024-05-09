@@ -78,9 +78,6 @@ INDENT		:=	$(UTILS_BIN_DIR)/yask_indent.sh
 PYTHON  	:=	python3
 SHELL		:=	/bin/bash
 SO_SUFFIX	:=	.so
-RUN_PREFIX	:=	env I_MPI_DEBUG=+5 I_MPI_PRINT_VERSION=1 OMP_DISPLAY_ENV=VERBOSE KMP_VERSION=1
-RUN_PYTHON	:= 	$(RUN_PREFIX) \
-	env PYTHONPATH=$(LIB_DIR):$(LIB_OUT_DIR):$(PY_OUT_DIR):$(YASK_DIR):$(PYTHONPATH) $(PYTHON)
 
 # Find include path needed for python interface.
 PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c \
@@ -232,6 +229,14 @@ endif
 # Linker flags.
 YK_LIBS		:=	-lrt
 YK_LFLAGS	:=	-Wl,-rpath=$(LIB_OUT_DIR) -L$(LIB_OUT_DIR) -l$(YK_EXT_BASE)
+
+# Prefixes to run commands.
+RUN_PREFIX	:=	env I_MPI_DEBUG=+5 I_MPI_PRINT_VERSION=1 OMP_DISPLAY_ENV=VERBOSE KMP_VERSION=1
+ifeq ($(offload),1)
+  RUN_PREFIX	+=	I_MPI_OFFLOAD=2
+endif
+RUN_PYTHON	:= 	$(RUN_PREFIX) \
+	PYTHONPATH=$(LIB_DIR):$(LIB_OUT_DIR):$(PY_OUT_DIR):$(YASK_DIR):$(PYTHONPATH) $(PYTHON)
 
 # Default number of ranks for running MPI tests.
 # 4 tests in-plane diagonal exchanges for 2D and 3D tests.
