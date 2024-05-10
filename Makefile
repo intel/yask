@@ -110,10 +110,10 @@ compiler-api:
 	$(YC_MAKE) api
 
 cxx-kernel-api:
-	$(YK_MAKE) $@
+	$(YK_MAKE) cxx-api
 
 py-kernel-api:
-	$(YK_MAKE) $@
+	$(YK_MAKE) py-api
 
 kernel-api: cxx-kernel-api py-kernel-api
 
