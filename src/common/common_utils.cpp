@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2023, Intel Corporation
+Copyright (c) 2014-2024, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -47,7 +47,7 @@ namespace yask {
     // https://semver.org/.
 
     // Format: "major.minor.patch[-alpha|-beta]".
-    const string version = "4.05.02";
+    const string version = "4.05.03";
 
     string yask_get_version_string() {
         return version;
@@ -623,7 +623,7 @@ namespace yask {
             "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n"
             "\u2502     Y*A*S*K \u2500\u2500 Yet Another Stencil Kit     \u2502\n"
             "\u2502       https://github.com/intel/yask        \u2502\n"
-            "\u2502 Copyright (c) 2014-2023, Intel Corporation \u2502\n"
+            "\u2502 Copyright (c) 2014-2024, Intel Corporation \u2502\n"
             "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n"
             "Version: " << yask_get_version_string() << endl;
 

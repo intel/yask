@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2023, Intel Corporation
+Copyright (c) 2014-2024, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -644,8 +644,8 @@ namespace {
             // Define values in scratch var 'B' based on 'A'.
             B(x) EQUALS def_t1d(A, t, x, 1, 0);
 
-            // Set 'A' from scratch var values.
-            A(t+1, x) EQUALS def_1d(B, x-4, 2, 3) + def_1d(B, x+6, 0, 1);
+            // Set each point in 'A' from 2 scratch var values offset from x.
+            A(t+1, x) EQUALS def_1d(B, x-4, 2, 3) + def_1d(B, 6+x, 0, 1);
         }
     };
 

@@ -31,11 +31,11 @@ and Intel(R) graphics processors.
 
 ### Pre-requisites:
 * Intel(R) [oneAPI](https://software.intel.com/content/www/us/en/develop/tools/oneapi.html)
-  HPC Toolkit for Linux (toolkit 2023.2 or later recommended); this will install
+  HPC Toolkit for Linux (toolkit 2024.1 or later recommended); this will install
   the Intel(R) oneAPI DPC++/C++ Compiler and the Intel(R) MPI Library.
   See compiler notes below under version 4.00.00 changes.
 * Gnu C++ compiler, g++ (8.5.0 or later recommended).
-  Even when using Intel compilers, a g++ installation is required.
+  (Even when using Intel compilers, a g++ installation is required.)
 * Linux libraries `librt` and `libnuma`.
 * Grep.
 * Perl (v5 or later).
@@ -68,6 +68,12 @@ and Intel(R) graphics processors.
 
 ## Backward-compatibility notices
 ### Version 4
+* Version 4.05.03 has a few notices:
+  - The default stencil name "iso3dfd" is removed; this means
+    you must always set the stencil name when building a kernel -- there is no default.
+    If you get an error about the "undefined" stencil, this means you didn't set the
+    stencil name.
+  - Some of the API-related Makefile target names were changed for consistency.
 * Version 4.05.00 removes the "out-of-band" genetic-algorithm tuning script
     due to lack of resources for maintenance and testing.
 * Version 4.04.00 deprecates the existing `void* {set,get}_elements_in_slice()`

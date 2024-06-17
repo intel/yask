@@ -1,6 +1,6 @@
 ##############################################################################
 ## YASK: Yet Another Stencil Kit
-## Copyright (c) 2014-2023, Intel Corporation
+## Copyright (c) 2014-2024, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -122,7 +122,9 @@ $(YC_EXEC): compiler_main.cpp $(YC_STENCIL_OBJS) $(YC_LIB)
 # Build C++ and Python compiler API libs.
 # (Makes sure the compiler exists also, to avoid problems
 # when trying to build the kernel w/o a compiler binary.)
-api: compiler $(YC_PY_LIB)
+compiler-api: compiler $(YC_PY_LIB)
+
+api: compiler-api
 
 # Build python compiler API lib.
 # Also builds $(YC_PY_MOD)

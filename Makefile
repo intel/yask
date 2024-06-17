@@ -1,6 +1,6 @@
 ##############################################################################
 ## YASK: Yet Another Stencil Kit
-## Copyright (c) 2014-2023, Intel Corporation
+## Copyright (c) 2014-2024, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -109,15 +109,15 @@ api-docs: docs/api/html/index.html
 compiler-api:
 	$(YC_MAKE) api
 
-kernel-api:
-	$(YK_MAKE) api
+cxx-kernel-api:
+	$(YK_MAKE) cxx-api
 
 py-kernel-api:
 	$(YK_MAKE) py-api
 
-api:
-	$(YC_MAKE) $@
-	$(YK_MAKE) $@
+kernel-api: cxx-kernel-api py-kernel-api
+
+api: compiler-api kernel-api
 
 # Remove old generated API documents and make new ones.
 docs/api/html/index.html: include/*.hpp include/*/*.hpp docs/api/*.*
@@ -142,11 +142,11 @@ clean:
 	$(YK_MAKE) $@
 
 # Remove executables, generated documentation, etc. (not logs).
-# Use 'find *' instead of 'find .' to avoid searching in '.git'.
+# Avoid 'find .' to prevent searching in '.git'.
 realclean: clean
 	rm -rf $(LIB_OUT_DIR) $(BIN_OUT_DIR) $(BUILD_OUT_DIR)
 	rm -fv TAGS '*~'
-	- find src include utils docs -name '*~' -print -delete
+	- find src include utils docs yask -name '*~' -print -delete
 	- find src -name '*.optrpt' -print -delete
 	- find src -name __pycache__ -print -delete
 	$(YC_MAKE) $@
@@ -292,6 +292,7 @@ all-tests: compiler-api common-unit-tests
 all:
 	$(MAKE) realclean
 	$(MAKE) tags
-	$(MAKE) default
-	$(MAKE) api-all
+	$(MAKE) docs
+	$(MAKE) compiler
+	$(MAKE) compiler-api
 	$(MAKE) all-tests

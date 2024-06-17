@@ -1,6 +1,6 @@
 ##############################################################################
 ## YASK: Yet Another Stencil Kit
-## Copyright (c) 2014-2023, Intel Corporation
+## Copyright (c) 2014-2024, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -602,7 +602,7 @@ $(YK_EXT_OBJ_DIR)/%.o: %.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
 ######## Primary targets.
 # NB: must set stencil and arch make vars to generate the desired YASK kernel.
 
-default: kernel
+default: kernel scripts
 
 # Compile the kernel.
 kernel: $(YK_EXEC) $(YK_SCRIPT) $(MAKE_REPORT_FILE)
@@ -703,11 +703,18 @@ headers: $(YK_GEN_HEADERS)
 ######## API targets
 # NB: must set stencil and arch to generate the desired kernel API.
 
-# Build C++ and Python kernel API libs.
-api: $(YK_LIB) $(YK_PY_LIB)
+# Build C++ kernel API lib.
+cxx-api: $(YK_LIB)
+
+cxx-kernel-api: cxx-api
 
 # Build python kernel API lib.
 py-api: $(YK_PY_LIB)
+
+py-kernel-api: py-api
+
+# Build C++ and Python kernel API libs.
+api: cxx-api py-api
 
 # Build C++ SWIG wrapper code.
 # This also creates $(YK_PY_MOD) as a side-effect.
@@ -747,11 +754,13 @@ NO_YC_MAKE_FLAGS := --new-file=$(YK_CODE_FILE)
 kernel-no-yc:
 	$(MAKE) $(NO_YC_MAKE_FLAGS) kernel
 
-api-no-yc:
-	$(MAKE) $(NO_YC_MAKE_FLAGS) api
+cxx-api-no-yc:
+	$(MAKE) $(NO_YC_MAKE_FLAGS) cxx-api
 
 py-api-no-yc:
 	$(MAKE) $(NO_YC_MAKE_FLAGS) py-api
+
+api-no-yc: cxx-api-no-yc py-api-no-yc
 
 # Remove intermediate files.
 # Should not trigger remake of stencil compiler.
@@ -879,17 +888,16 @@ help:
 	echo " $(MAKE) clean; $(MAKE) -j stencil=awp yk-api"; \
 	echo " "
 	@echo "Example debug builds of kernel cmd-line tool:"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 omp=0 YK_CXXOPT='-O0' check=1 # No optimization, OpenMP, or MPI; use internal checking"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=avx2 stencil=test_2d YK_CXXOPT='-O0' trace=1   # Enable tracing; run with '-trace' to get trace"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 YK_CXXOPT='-O0' check=1     # No optimization or MPI; use internal checking"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=avx2 stencil=test_2d YK_CXXOPT='-O0' trace=1 # Enable tracing; run with '-trace' to get trace"; \
 	echo " "
 	@echo "Example regression tests (run before any git push or pull request):"; \
 	echo " $(MAKE) -j all                           # Normal full API and stencil tests"; \
 	echo " $(MAKE) -j all offload=1                 # Test device offload"; \
-	echo " $(MAKE) -j all offload_usm=1             # Test device offload with unified shared memory"; \
 	echo " $(MAKE) -j all ranks=8                   # Test with 8 MPI ranks"; \
+	echo " $(MAKE) -j all mpi=0                     # Test w/o MPI"; \
 	echo " $(MAKE) -j all YK_CXXOPT=-O1             # Test at O1 optimization"; \
 	echo " $(MAKE) -j all YK_CXX=g++                # Test w/g++"; \
-	echo " $(MAKE) -j all mpi=0                     # Test w/o MPI"; \
 	echo " $(MAKE) -j all YASK_OUTPUT_DIR=test-dir  # Test using alternate output dir"
 
 
@@ -932,7 +940,8 @@ cxx-yk-omp-test:
 	@echo '*** Running the C++ YASK OpenMP test...'
 	$(RUN_PREFIX) $(YK_OMP_TEST_EXEC)
 
-$(YK_VAR_TEST_EXEC): $(YK_TEST_SRC_DIR)/var_test.cpp $(YK_LIB)
+$(YK_VAR_TEST_EXEC): $(YK_TEST_SRC_DIR)/var_test.cpp
+	$(TEST_MAKE) $(YK_LIB) stencil=test_3d
 	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS2) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@
@@ -946,7 +955,8 @@ cxx-yk-var-test:
 ### API tests.
 
 # Build C++ kernel tests.
-$(YK_API_TEST_EXEC): $(YK_TEST_SRC_DIR)/yask_kernel_api_test.cpp $(YK_LIB)
+$(YK_API_TEST_EXEC): $(YK_TEST_SRC_DIR)/yask_kernel_api_test.cpp
+	$(TEST_MAKE) cxx-api allow_new_var_types=1 
 	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@
@@ -954,31 +964,35 @@ $(YK_API_TEST_EXEC): $(YK_TEST_SRC_DIR)/yask_kernel_api_test.cpp $(YK_LIB)
 # Build and run C++ tests.
 # First run on 1 rank, then multiple ranks if ranks>1.
 cxx-yk-api-test:
-	$(TEST_MAKE) $(YK_API_TEST_EXEC) allow_new_var_types=1
+	$(TEST_MAKE) $(YK_API_TEST_EXEC) stencil=test_3d
 	@echo '*** Running the C++ YASK kernel API test...'
 	$(RUN_PREFIX) $(YK_API_TEST_EXEC)
 	if (( $(ranks) > 1 )); then $(RUN_PREFIX) mpirun -np $(ranks) $(YK_API_TEST_EXEC); fi
 
 # Run Python kernel API test.
 # First run on 1 rank, then multiple ranks if ranks>1.
-py-yk-api-test: $(YK_TEST_SRC_DIR)/yask_kernel_api_test.py $(YK_PY_LIB)
+py-yk-api-test: $(YK_TEST_SRC_DIR)/yask_kernel_api_test.py
+	$(TEST_MAKE) py-api allow_new_var_types=1 stencil=test_3d
 	@echo '*** Running the Python YASK kernel API test...'
 	$(RUN_PYTHON) $<
 	if (( $(ranks) > 1 )); then mpirun -np $(ranks) $(RUN_PYTHON) $<; fi
 
 # Build C++ kernel tests with exceptions.
-$(YK_API_TEST_EXEC_WITH_EXCEPTION): $(YK_TEST_SRC_DIR)/yask_kernel_api_exception_test.cpp $(YK_LIB)
+$(YK_API_TEST_EXEC_WITH_EXCEPTION): $(YK_TEST_SRC_DIR)/yask_kernel_api_exception_test.cpp
+	$(TEST_MAKE) cxx-api allow_new_var_types=1 
 	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@
 
 # Run C++ tests with exceptions.
-cxx-yk-api-test-with-exception: $(YK_API_TEST_EXEC_WITH_EXCEPTION)
+cxx-yk-api-test-with-exception:
+	$(TEST_MAKE) $(YK_API_TEST_EXEC_WITH_EXCEPTION) stencil=test_3d
 	@echo '*** Running the C++ YASK kernel API test with exception...'
-	$(RUN_PREFIX) $<
+	$(RUN_PREFIX) $(YK_API_TEST_EXEC_WITH_EXCEPTION)
 
 # Run Python kernel API test with exceptions.
-py-yk-api-test-with-exception: $(YK_TEST_SRC_DIR)/yask_kernel_api_exception_test.py $(YK_PY_LIB)
+py-yk-api-test-with-exception: $(YK_TEST_SRC_DIR)/yask_kernel_api_exception_test.py
+	$(TEST_MAKE) py-api allow_new_var_types=1 stencil=test_3d
 	@echo '*** Running the Python YASK kernel API test with exception...'
 	$(RUN_PYTHON) $<
 
@@ -1176,13 +1190,12 @@ unit-tests:
 
 all-tests:
 	$(MAKE) unit-tests
-	$(MAKE) stencil-tests
 	$(MAKE) api-tests
+	$(MAKE) stencil-tests
 
-# First, build a kernel and an API lib w/o any validation just to test the build env.
+# Install the script.
 # Then, build and run all the tests.
 all:
-	$(MAKE) kernel stencil=test_3d
-	$(MAKE) api stencil=test_3d
+	$(MAKE) script
 	$(MAKE) all-tests
 
