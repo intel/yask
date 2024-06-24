@@ -255,8 +255,10 @@ namespace yask {
             // Adjust padding only for domain dims.
             if (_domain_dim_mask & mbit) {
 
-                // Rounding should use soln vec lengths in case
-                // this var is not vectorized.
+                // Use soln vec len for rounding to allow reading a non-vec
+                // var in this dim while calculating a vec var. (The var
+                // vec-len is always 1 or the same as the soln vec-len in a
+                // given dim.)
                 auto svl = _corep->_soln_vec_lens[i];
 
                 // Add more padding requested by options or APIs.
@@ -265,31 +267,38 @@ namespace yask {
                 new_left_pads[i] = max(new_left_pads[i], _corep->_req_left_pads[i]);
                 new_right_pads[i] = max(new_right_pads[i], _corep->_req_right_pads[i]);
 
-                // Round left pad up to vec len.
+                // Round left pad up to soln vec len.
                 new_left_pads[i] = ROUND_UP(new_left_pads[i], svl);
 
-                // Round domain + right pad up to soln vec len by extending right pad.
-                // Using soln vec len to allow reading a non-vec var in this dim
-                // while calculating a vec var. (The var vec-len is always 1 or the same
-                // as the soln vec-len in a given dim.)
-                idx_t dprp = ROUND_UP(_corep->_domains[i] + new_right_pads[i], svl);
+                // Sum of rounded-up domain and rounded right pad.
+                idx_t rdpp = ROUND_UP(_corep->_domains[i] + new_right_pads[i], svl);
 
-                // Calculate pads from overall domain + right pad.
-                new_right_pads[i] = dprp - _corep->_domains[i];
-                
-                // Add yet another vec to both sides. This allows full-vector reads;
-                // only writes are masked.
+                // Subtract domain size back out to get desired right pad.
+                new_right_pads[i] = rdpp - _corep->_domains[i];
+
+                // When vec len > 1, add extra vecs to accommodate
+                // mis-alignment and extra calculations
+                //
+                // Example:
+                // ... +-------+-+           Last full vec and partial vec domain,
+                // ... +-------+-+---+       so minimal halo is within 1-vec pad.
+                // ... +-------+-------+     But full vecs actually calc'd,
+                // ... +-------+-------+---+      so halo reads are needed beyond that.
+                // ... +-------+-------+---+---+  Rounded up for alloc.
+                #if VLEN > 1
                 new_left_pads[i] += svl;
                 new_right_pads[i] += svl;
+                #endif
 
-                // Make inner dim an odd number of vecs.
+                // Make inner dim an odd number of vecs when allowed.
                 // This reportedly helps avoid some uarch aliasing.
-                auto na = new_left_pads[i] + _corep->_domains[i] + new_right_pads[i];
+                // Only add this optional vector if not already allocated.
                 if (!p &&
                     actl_opts->_allow_addl_pad &&
-                    get_dim_name(i) == inner_layout_dim &&
-                    (na / svl) % 2 == 0) {
-                    new_right_pads[i] += svl;
+                    get_dim_name(i) == inner_layout_dim) {
+                    auto na = new_left_pads[i] + _corep->_domains[i] + new_right_pads[i];
+                    if ((na / svl) % 2 == 0)
+                        new_right_pads[i] += svl;
                 }
 
                 // If storage is allocated, get max of existing pad & new
