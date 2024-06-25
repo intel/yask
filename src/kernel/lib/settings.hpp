@@ -264,7 +264,7 @@ namespace yask {
 
         // Var behavior, including allocation.
         bool _step_wrap = false; // Allow invalid step indices to alias to valid ones (set via APIs only).
-        bool _allow_addl_pad = true; // Allow extending padding beyond what's needed for alignment.
+        bool _allow_addl_pad = false;
         #ifdef USE_OFFLOAD
         bool _bundle_allocs = false;
         #else
