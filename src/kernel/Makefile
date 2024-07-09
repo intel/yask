@@ -372,7 +372,7 @@ ifeq ($(cxx_is_llvm_intel),1)
 			-fimf-precision=low -fp-model fast -fimf-domain-exclusion=none -fma
  YK_CXXWARN2	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable \
 			-Wno-unused-const-variable -fno-color-diagnostics
- OMPFLAG	:=	-fiopenmp
+ OMPFLAG	:=	-qopenmp
  SWIG_CXXFLAGS	+=	-Wno-deprecated-declarations
  MACROS		+=	INTEL_OMP
  VEC_MACROS	+=	NO_PRAGMA_VEC2
