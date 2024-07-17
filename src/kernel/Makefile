@@ -881,7 +881,6 @@ help:
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXXOPT='-O2' # Use O2 optimization"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXX=icpc   # Use classic Intel compiler"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXX=g++    # Use gnu compiler"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg MPI_CXX=mpiCC # Specify MPI compiler"; \
 	echo " "
 	@echo "Example builds of kernel API for C++ and Python apps:"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd yk-api"; \
