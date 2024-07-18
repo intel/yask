@@ -390,12 +390,8 @@ ppn=$(( $nranks / $nnodes ))
 if [[ $nranks > 1 || $force_mpi == 1 ]]; then
 
     if [[ $arch_offload =~ "nv" ]]; then
+        : ${mpi_cmd="mpirun -np $nranks --oversubscribe"}
 
-        if [[ $ppn > $ngpus ]]; then
-            : ${mpi_cmd="mpirun -np $nranks --oversubscribe"}
-        else
-            : ${mpi_cmd="mpirun -np $nranks"}
-        fi
     else
         : ${mpi_cmd="mpirun -np $nranks -ppn $ppn"}
 
