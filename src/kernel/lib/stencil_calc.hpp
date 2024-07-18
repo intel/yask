@@ -690,7 +690,7 @@ namespace yask {
             // Full rectilinear polytope of aligned vecs.
             else {
                 TRACE_MSG("calculating vecs within "
-                          "normalized local indices " <<
+                          "*normalized* local indices " <<
                           norm_fvidxs.make_range_str(true) <<
                           " via outer thread " << outer_thread_idx <<
                           " and inner thread " << inner_thread_idx);
@@ -712,15 +712,16 @@ namespace yask {
                           sb_fvidxs.make_range_str(true) <<
                           " via outer thread " << outer_thread_idx <<
                           " and inner thread " << inner_thread_idx);
-                #if VPTS == 1
+                #if VLEN == 1
                 THROW_YASK_EXCEPTION("(internal fault) vector border-code not expected with vec-size==1");
                 #else
 
                 // Normalized vector indices.
                 auto norm_ovidxs = normalize_indices(sb_ovidxs);
 
-                // Need to find range in each border part.
-                // 2D example w/4 edges and 4 corners:
+                // Need to find range in each border part.  2D example w/4
+                // edges and 4 corners:
+                //
                 // +---+------+---+
                 // | lx|      |rx |
                 // | ly|  ly  |ly |
@@ -839,7 +840,7 @@ namespace yask {
                             if (pv_needed) {
                                 TRACE_MSG("calculating partial vectors with mask 0x" << 
                                           std::hex << pv_mask << std::dec << " for " << descr <<
-                                          " within normalized local indices " <<
+                                          " within *normalized* local indices " <<
                                           pv_part.make_range_str(true) <<
                                           " via outer thread " << outer_thread_idx <<
                                           " and inner thread " << inner_thread_idx);

@@ -372,7 +372,7 @@ ifeq ($(cxx_is_llvm_intel),1)
 			-fimf-precision=low -fp-model fast -fimf-domain-exclusion=none -fma
  YK_CXXWARN2	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable \
 			-Wno-unused-const-variable -fno-color-diagnostics
- OMPFLAG	:=	-fiopenmp
+ OMPFLAG	:=	-qopenmp
  SWIG_CXXFLAGS	+=	-Wno-deprecated-declarations
  MACROS		+=	INTEL_OMP
  VEC_MACROS	+=	NO_PRAGMA_VEC2
@@ -881,7 +881,6 @@ help:
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXXOPT='-O2' # Use O2 optimization"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXX=icpc   # Use classic Intel compiler"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXX=g++    # Use gnu compiler"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg MPI_CXX=mpiCC # Specify MPI compiler"; \
 	echo " "
 	@echo "Example builds of kernel API for C++ and Python apps:"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd yk-api"; \
@@ -910,21 +909,29 @@ help:
 first_test	:=	0
 last_test	:=	999
 
+# Default regex for stencil to run.
+test_regex	:=	.
+
 TEST_MAKE_ARGS	:=	real_bytes=8 use_rcp=0 allow_new_var_types=0 trace=1
 TEST_MAKE 	:=	$(MAKE) $(TEST_MAKE_ARGS)
 
-# Define makefile functions for folding.
 # Set default threads.
-# Disable folding and checking for offload testing.
+# Enable checking for CPU testing.
 ifeq ($(offload),1)
-FOLD		=
 outer_threads	:=	2
 inner_threads	:=	2
 else
-TEST_MAKE_ARGS	+=	check=1
-FOLD		=	fold=$(subst $(space),$(comma),$(1))
 outer_threads	:=	8
 inner_threads	:=	2
+TEST_MAKE_ARGS	+=	check=1
+endif
+
+# Define makefile functions for folding.
+# Disable folding for non-vectorized arch.
+ifeq ($(arch),intel64)
+FOLD		=
+else
+FOLD		=	fold=$(subst $(space),$(comma),$(1))
 endif
 
 ### Unit tests.
@@ -1041,7 +1048,7 @@ test_args10	:=	$(DEF_MPI_TEST_ARGS) -l 64 -b 24 -mb 16 -bt 2 -no-use_shm -overla
 test_args11	:=	$(DEF_MPI_TEST_ARGS) -l 64 -b 24 -mb 16 -bt 2 -use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
 endif
 
-# Run the kernel binary using several combos of sizes and ranks.
+# Run the kernel binary using the test args defined above.
 yk-tests:
 	if (( $(first_test) <= 0 && $(last_test) >= 0 )); then $(YK_SCRIPT) $(test_args0); fi
 	if (( $(first_test) <= 1 && $(last_test) >= 1 )); then $(YK_SCRIPT) $(test_args1); fi
@@ -1057,15 +1064,19 @@ yk-mpi-tests:
 # Run the default YASK compiler and kernel.
 # First run on 1 rank, then multiple ranks if ranks>1.
 # This is the primary target for building and running stencil tests.
-yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
-	$(MAKE) ranks=1 yk-tests
-	if (( $(ranks) > 1 )); then $(MAKE) yk-tests yk-mpi-tests; fi
+yc-and-yk-test: $(YK_SCRIPT)
+	@ echo "Running tests that match regex '$(test_regex)' numbered from $(first_test) to $(last_test)..."
+	if [[ $(stencil) =~ $(test_regex) ]]; then \
+	  $(MAKE) $(YK_EXEC) && \
+	  $(MAKE) ranks=1 yk-tests && \
+	  if (( $(ranks) > 1 )); then $(MAKE) yk-tests yk-mpi-tests; fi; \
+	fi
 STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 
 # Run the YASK kernel test without implicity using the YASK compiler.
 yk-test-no-yc: kernel-no-yc $(YK_SCRIPT)
 	$(MAKE) ranks=1 yk-tests
-	if (( $(ranks) > 1 )); then $(MAKE) yk-tests yk-mpi-tests; fi
+	(( $(ranks) > 1 )) && $(MAKE) yk-tests yk-mpi-tests
 
 # Run the kernel API tests for C++ and Python with and w/o expected exceptions.
 api-tests:
@@ -1159,20 +1170,6 @@ single-stencil-tests:
 4d-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_4d $(call FOLD,w=2 x=2)
 
-# Selected collections from above for testing specific features.
-scratch-tests:
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_1d $(call FOLD,x=4)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_stages_1d $(call FOLD,x=4)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_boundary_1d $(call FOLD,x=4)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_2d $(call FOLD,x=2 y=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_3d $(call FOLD,x=2 z=2) inner_loop_dim=x
-
-boundary-tests:
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_1d $(call FOLD,x=4)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_boundary_1d $(call FOLD,x=4)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_2d $(call FOLD,x=2 y=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_3d $(call FOLD,x=2 y=2) inner_loop_dim=1
-
 # The standard set of stencils to test.
 stencil-tests:
 	$(MAKE) 1d-tests
@@ -1184,6 +1181,16 @@ stencil-tests:
 	if (( $(offload) == 0 )); then $(MAKE) 3d-tests4; fi
 	$(MAKE) 4d-tests
 
+# Pre-defined feature tests.
+scratch-tests:
+	$(MAKE) stencil-tests test_regex=scratch
+
+boundary-tests:
+	$(MAKE) stencil-tests test_regex=boundary
+
+stages-tests:
+	$(MAKE) stencil-tests test_regex=stages
+
 unit-tests:
 	$(MAKE) clean; $(MAKE) cxx-yk-omp-test
 	$(MAKE) clean; $(MAKE) cxx-yk-var-test stencil=test_3d $(call FOLD,x=2 y=2)
@@ -1193,9 +1200,9 @@ all-tests:
 	$(MAKE) api-tests
 	$(MAKE) stencil-tests
 
-# Install the script.
+# Install the scripts.
 # Then, build and run all the tests.
 all:
-	$(MAKE) script
+	$(MAKE) scripts
 	$(MAKE) all-tests
 

@@ -172,7 +172,7 @@ while true; do
         echo "     Run YASK executable as an argument to <command>, e.g., 'numactl -N 0'."
         echo "  -mpi_cmd <command>"
         echo "     Run YASK executable as an argument to <command>, e.g., 'mpiexec.hydra -n 4'."
-        echo "     If -mpi_cmd and -exe_prefix are both specified, this one is used first."
+        echo "     If -mpi_cmd and -exe_prefix are both specified, this one is applied first."
         echo "     The default command is based on the number of nodes and ranks (see below)."
         echo "  -force_mpi"
         echo "     Generate a default 'mpirun' prefix even if there is only 1 rank to run."
@@ -186,7 +186,6 @@ while true; do
         echo "     This value, along with the number of nodes, <N>, is used to set these defaults:"
         echo "      - Number of MPI ranks per node to <R>/<N>."
         echo "      - Number of OpenMP threads per rank based on core count (for CPU kernels only)."
-        echo "      - Default MPI command to 'mpirun -np <R> -ppn <R>/<N>'."
         echo "     If a different MPI command is needed, use -mpi_cmd <command> explicitly."
         echo "     If the env var SLURM_NTASKS is set AND if it greater than the number of nodes,"
         echo "        the default is its value."
@@ -389,15 +388,22 @@ fi
 # Set MPI command default.
 ppn=$(( $nranks / $nnodes ))
 if [[ $nranks > 1 || $force_mpi == 1 ]]; then
-    : ${mpi_cmd="mpirun -np $nranks -ppn $ppn"}
 
-    # Add default Intel MPI settings.
-    envs+=" I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5"
+    if [[ $arch_offload =~ "nv" ]]; then
+        : ${mpi_cmd="mpirun -np $nranks --oversubscribe"}
 
-    # Add NUMA pinning if number of discovered NUMA nodes
-    # equals what is being used.
-    if [[ -n "$nnumas" && $nnumas == $ppn ]]; then
-        envs+=" I_MPI_PIN_DOMAIN=numa"
+    else
+        : ${mpi_cmd="mpirun -np $nranks -ppn $ppn"}
+
+        # Add default Intel MPI settings.
+        # These will be ignored if Intel MPI isn't used.
+        envs+=" I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5"
+
+        # Add NUMA pinning if number of discovered NUMA nodes
+        # equals what is being used.
+        if [[ -n "$nnumas" && $nnumas == $ppn ]]; then
+            envs+=" I_MPI_PIN_DOMAIN=numa"
+        fi
     fi
 
     # Check whether HBM policy setting is allowed.

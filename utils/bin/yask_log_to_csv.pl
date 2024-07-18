@@ -45,7 +45,7 @@ $outFH = *STDOUT;
 
 # Header.
 YaskUtils::printCsvHeader($outFH);
-print $outFH ",log file\n";
+print $outFH ",date & time,log file\n";
 
 # Values from files.
 for my $arg (@ARGV) {
@@ -53,7 +53,12 @@ for my $arg (@ARGV) {
     my %results;
     YaskUtils::getResultsFromFile(\%results, $fn);
 
+    my $datestr = "";
+    if ($fn =~ /(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})/) {
+      $datestr = "$2/$3/$1 $4:$5:$6"; # format for Excel.
+    }
+
     YaskUtils::printCsvValues(\%results, $outFH);
-    print $outFH ",\"$fn\"\n";
+    print $outFH ",\"$datestr\",\"$fn\"\n";
   }
 }

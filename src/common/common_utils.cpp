@@ -47,7 +47,7 @@ namespace yask {
     // https://semver.org/.
 
     // Format: "major.minor.patch[-alpha|-beta]".
-    const string version = "4.05.03";
+    const string version = "4.05.04";
 
     string yask_get_version_string() {
         return version;
