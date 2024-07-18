@@ -151,8 +151,14 @@ namespace yask {
         reset_auto_tuner(actl_opts->_do_auto_tune, false);
 
         // Report ranks.
+        #ifdef USE_MPI
         DEBUG_MSG("\nNum MPI ranks:             " << env->get_num_ranks() <<
-                  "\nThis MPI rank index:       " << env->get_rank_index());
+                  "\nThis MPI rank index:       " << env->get_rank_index() <<
+                  "\nNum shm-group MPI ranks:   " << env->num_shm_ranks <<
+                  "\nThis shm-group MPI rank:   " << env->my_shm_rank);
+        #else
+        DEBUG_MSG("\nMPI not supported in this binary");
+        #endif
 
         // report threads.
         {

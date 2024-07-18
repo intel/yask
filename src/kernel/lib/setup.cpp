@@ -120,6 +120,11 @@ namespace yask {
         #ifdef USE_OFFLOAD
         _omp_hostn = omp_get_initial_device();
         _omp_devn = omp_get_default_device();
+
+        // Heuristic to assign GPU n to rank n on this node.
+        // Assumes shm is local to a node.
+        if (my_rank > 0 && omp_get_num_devices() > my_shm_rank)
+            _omp_devn = my_shm_rank;
         #endif
 
         #else
