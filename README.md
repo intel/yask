@@ -67,6 +67,7 @@ and Intel(R) graphics processors.
       for functional testing if you don't have native support for the targeted instruction set.
 
 ## Backward-compatibility notices
+
 ### Version 4
 * Version 4.05.03 has a few notices:
   - The default stencil name "iso3dfd" is removed; this means
